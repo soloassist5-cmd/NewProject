@@ -16,6 +16,7 @@ import type {
   TypingUser,
 } from '@/lib/types';
 import { useEventStream, type StreamEvent } from '@/lib/useStream';
+import { useViewportHeight } from '@/lib/useViewport';
 
 /**
  * Вставляет сообщение в ленту.
@@ -53,7 +54,19 @@ function mergeMessage(list: ChatMessage[], incoming: ChatMessage, myId: number):
   return next;
 }
 
-export default function Messenger({ me: initialMe }: { me: Me }) {
+export interface GradesConfig {
+  parallels: readonly number[];
+  letters: readonly string[];
+  staffLabel: string;
+}
+
+interface MessengerProps {
+  me: Me;
+  schoolName: string;
+  grades: GradesConfig;
+}
+
+export default function Messenger({ me: initialMe, schoolName, grades }: MessengerProps) {
   const [me, setMe] = useState(initialMe);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -67,13 +80,22 @@ export default function Messenger({ me: initialMe }: { me: Me }) {
   const [showProfile, setShowProfile] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
+  // На телефоне высоту задаёт видимая область, а не окно: иначе клавиатура
+  // накрывает строку ввода.
+  useViewportHeight();
+
   // Читаются внутри обработчиков событий, которые не должны пересоздаваться.
   const activeIdRef = useRef<number | null>(null);
+  const messagesRef = useRef<Record<number, ChatMessage[]>>({});
   const windowFocused = useRef(true);
 
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     const onFocus = () => {
@@ -126,6 +148,52 @@ export default function Messenger({ me: initialMe }: { me: Me }) {
     const timer = setInterval(() => void refreshConversations(), 60_000);
     return () => clearInterval(timer);
   }, [refreshConversations]);
+
+  /**
+   * Возвращение в приложение после сворачивания.
+   *
+   * Журнал событий хранит только последние часы, поэтому после долгого
+   * отсутствия одного переподключения мало: дочитываем пропущенное напрямую,
+   * по курсору последнего известного сообщения.
+   */
+  useEffect(() => {
+    const resync = async () => {
+      if (document.visibilityState !== 'visible') return;
+
+      void refreshConversations();
+
+      const id = activeIdRef.current;
+      if (id == null) return;
+
+      const known = messagesRef.current[id] ?? [];
+      const lastId = known.length > 0 ? known[known.length - 1].id : 0;
+      if (lastId <= 0) return;
+
+      try {
+        const data = await api.get<{ messages: ChatMessage[] }>(
+          `/api/conversations/${id}/messages?after=${lastId}`,
+        );
+        if (data.messages.length === 0) return;
+
+        setMessages((prev) => {
+          const list = prev[id];
+          if (!list) return prev;
+          let next = list;
+          for (const message of data.messages) next = mergeMessage(next, message, me.id);
+          return { ...prev, [id]: next };
+        });
+      } catch {
+        // Не вышло — данные подтянутся при следующем открытии диалога.
+      }
+    };
+
+    document.addEventListener('visibilitychange', resync);
+    window.addEventListener('online', resync);
+    return () => {
+      document.removeEventListener('visibilitychange', resync);
+      window.removeEventListener('online', resync);
+    };
+  }, [me.id, refreshConversations]);
 
   const markRead = useCallback(async (conversationId: number, messageId: number) => {
     setConversations((prev) =>
@@ -437,10 +505,24 @@ export default function Messenger({ me: initialMe }: { me: Me }) {
     [openConversation, refreshConversations],
   );
 
+  /** Вход в группу по коду приглашения. */
+  const joinByCode = useCallback(
+    async (code: string) => {
+      const data = await api.post<{ conversation: Conversation }>('/api/conversations/join', {
+        code,
+      });
+      await refreshConversations();
+      setShowNewChat(false);
+      await openConversation(data.conversation.id);
+    },
+    [openConversation, refreshConversations],
+  );
+
   return (
     <div className="app" data-mobile-view={mobileView}>
       <Sidebar
         me={me}
+        schoolName={schoolName}
         conversations={conversations}
         activeId={activeId}
         loading={loadingConversations}
@@ -470,11 +552,17 @@ export default function Messenger({ me: initialMe }: { me: Me }) {
           onClose={() => setShowNewChat(false)}
           onStartDirect={startDirectChat}
           onCreateGroup={createGroup}
+          onJoinByCode={joinByCode}
         />
       ) : null}
 
       {showProfile ? (
-        <ProfileDialog me={me} onClose={() => setShowProfile(false)} onUpdated={setMe} />
+        <ProfileDialog
+          me={me}
+          grades={grades}
+          onClose={() => setShowProfile(false)}
+          onUpdated={setMe}
+        />
       ) : null}
     </div>
   );

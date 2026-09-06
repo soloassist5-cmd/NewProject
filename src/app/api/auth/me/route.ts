@@ -14,6 +14,7 @@ export const GET = handle(async () => {
       id: user.id,
       username: user.username,
       displayName: user.display_name,
+      grade: user.grade,
       avatarColor: user.avatar_color,
       avatarFileId: user.avatar_file_id,
       bio: user.bio,

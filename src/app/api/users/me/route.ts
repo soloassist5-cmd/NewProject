@@ -4,7 +4,7 @@ import { sql, sqlOne } from '@/lib/db';
 import { publish } from '@/lib/events';
 import { HttpError, json, readJson, withUser } from '@/lib/http';
 import { getUser } from '@/lib/queries';
-import { parseBio, parseDisplayName, parseId, parsePassword } from '@/lib/validate';
+import { parseBio, parseDisplayName, parseGrade, parseId, parsePassword } from '@/lib/validate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,7 +30,15 @@ export const PATCH = withUser(async (user, request) => {
     await sql`UPDATE users SET avatar_color = ${color} WHERE id = ${user.id}`;
   }
 
+  if (body.grade !== undefined) {
+    await sql`UPDATE users SET grade = ${parseGrade(body.grade)} WHERE id = ${user.id}`;
+  }
+
   if (body.avatarFileId !== undefined) {
+    // Аватарка у человека одна: прежнюю картинку удаляем сразу, а не оставляем
+    // висеть в базе до ночной уборки.
+    const previousId = user.avatar_file_id;
+
     if (body.avatarFileId === null) {
       await sql`UPDATE users SET avatar_file_id = NULL WHERE id = ${user.id}`;
     } else {
@@ -41,6 +49,17 @@ export const PATCH = withUser(async (user, request) => {
       if (!file) throw new HttpError(404, 'Картинка не найдена.');
       if (!file.mime.startsWith('image/')) throw new HttpError(400, 'Аватар должен быть картинкой.');
       await sql`UPDATE users SET avatar_file_id = ${fileId} WHERE id = ${user.id}`;
+    }
+
+    if (previousId && previousId !== Number(body.avatarFileId)) {
+      // Ту же картинку могли приложить к сообщению — тогда она не только аватарка
+      // и удалять её нельзя.
+      await sql`
+        DELETE FROM files f
+        WHERE f.id = ${previousId}
+          AND f.owner_id = ${user.id}
+          AND NOT EXISTS (SELECT 1 FROM message_attachments ma WHERE ma.file_id = f.id)
+      `;
     }
   }
 

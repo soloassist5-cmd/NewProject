@@ -3,17 +3,33 @@
 import { useState } from 'react';
 import { api, ApiError } from '@/lib/client';
 
+interface AuthScreenProps {
+  inviteOnly: boolean;
+  schoolName: string;
+  parallels: readonly number[];
+  letters: readonly string[];
+  staffLabel: string;
+}
+
 /** Вход и регистрация. После успеха перезагружаем страницу — сессия уже в куке. */
-export default function AuthScreen({ inviteOnly }: { inviteOnly: boolean }) {
+export default function AuthScreen({
+  inviteOnly,
+  schoolName,
+  parallels,
+  letters,
+  staffLabel,
+}: AuthScreenProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
+  const [parallel, setParallel] = useState<string>('');
+  const [letter, setLetter] = useState<string>(letters[0] ?? '');
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const isRegister = mode === 'register';
+  const isStaff = parallel === '';
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -24,7 +40,12 @@ export default function AuthScreen({ inviteOnly }: { inviteOnly: boolean }) {
 
     try {
       if (isRegister) {
-        await api.post('/api/auth/register', { username, displayName, password, inviteCode });
+        await api.post('/api/auth/register', {
+          username,
+          password,
+          grade: isStaff ? '' : `${parallel}${letter}`,
+          inviteCode,
+        });
       } else {
         await api.post('/api/auth/login', { username, password });
       }
@@ -43,31 +64,20 @@ export default function AuthScreen({ inviteOnly }: { inviteOnly: boolean }) {
           <span className="brand-mark">П</span>
           <div>
             <h1 className="auth-title">Перемена</h1>
+            <p className="auth-school">{schoolName}</p>
           </div>
         </div>
         <p className="auth-subtitle">
-          {isRegister ? 'Создайте аккаунт, чтобы начать переписку.' : 'Школьный мессенджер. Войдите, чтобы продолжить.'}
+          {isRegister
+            ? 'Придумайте логин и пароль и выберите свой класс.'
+            : 'Мессенджер для своих. Войдите, чтобы продолжить.'}
         </p>
 
         <form className="auth-form" onSubmit={submit}>
           {error ? <div className="error-banner">{error}</div> : null}
 
-          {isRegister ? (
-            <label className="field">
-              <span className="field-label">Как вас зовут</span>
-              <input
-                className="input"
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Аня Смирнова"
-                autoComplete="name"
-                required
-              />
-            </label>
-          ) : null}
-
           <label className="field">
-            <span className="field-label">Имя пользователя</span>
+            <span className="field-label">Логин</span>
             <input
               className="input"
               value={username}
@@ -75,7 +85,9 @@ export default function AuthScreen({ inviteOnly }: { inviteOnly: boolean }) {
               placeholder="anya"
               autoComplete="username"
               autoCapitalize="none"
+              autoCorrect="off"
               spellCheck={false}
+              inputMode="text"
               required
             />
             {isRegister ? (
@@ -96,6 +108,44 @@ export default function AuthScreen({ inviteOnly }: { inviteOnly: boolean }) {
             {isRegister ? <span className="field-hint">Не короче 8 символов.</span> : null}
           </label>
 
+          {isRegister ? (
+            <div className="field">
+              <span className="field-label">Класс</span>
+              <div className="grade-picker">
+                <select
+                  className="input"
+                  value={parallel}
+                  onChange={(event) => setParallel(event.target.value)}
+                  aria-label="Параллель"
+                >
+                  <option value="">{staffLabel}</option>
+                  {parallels.map((value) => (
+                    <option key={value} value={value}>
+                      {value} класс
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className="input"
+                  value={letter}
+                  onChange={(event) => setLetter(event.target.value)}
+                  disabled={isStaff}
+                  aria-label="Литера класса"
+                >
+                  {letters.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <span className="field-hint">
+                {isStaff ? 'Класс не указывается.' : `Ваш класс: ${parallel}${letter}`}
+              </span>
+            </div>
+          ) : null}
+
           {isRegister && inviteOnly ? (
             <label className="field">
               <span className="field-label">Код приглашения</span>
@@ -103,7 +153,9 @@ export default function AuthScreen({ inviteOnly }: { inviteOnly: boolean }) {
                 className="input"
                 value={inviteCode}
                 onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
-                placeholder="ШКОЛА-2026"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
                 required
               />
               <span className="field-hint">Регистрация закрыта — код выдаёт администратор.</span>

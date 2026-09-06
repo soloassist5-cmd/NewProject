@@ -10,10 +10,17 @@ interface NewChatDialogProps {
   onClose: () => void;
   onStartDirect: (personId: number) => Promise<void>;
   onCreateGroup: (title: string, memberIds: number[]) => Promise<void>;
+  onJoinByCode: (code: string) => Promise<void>;
 }
 
-export default function NewChatDialog({ onClose, onStartDirect, onCreateGroup }: NewChatDialogProps) {
-  const [mode, setMode] = useState<'direct' | 'group'>('direct');
+export default function NewChatDialog({
+  onClose,
+  onStartDirect,
+  onCreateGroup,
+  onJoinByCode,
+}: NewChatDialogProps) {
+  const [mode, setMode] = useState<'direct' | 'group' | 'code'>('direct');
+  const [code, setCode] = useState('');
   const [people, setPeople] = useState<Person[]>([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Person[]>([]);
@@ -22,6 +29,8 @@ export default function NewChatDialog({ onClose, onStartDirect, onCreateGroup }:
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (mode === 'code') return;
+
     const timer = setTimeout(async () => {
       try {
         const data = await api.get<{ people: Person[] }>(
@@ -34,7 +43,7 @@ export default function NewChatDialog({ onClose, onStartDirect, onCreateGroup }:
     }, search ? 220 : 0);
 
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, mode]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -93,6 +102,12 @@ export default function NewChatDialog({ onClose, onStartDirect, onCreateGroup }:
             >
               Группа
             </button>
+            <button
+              className={mode === 'code' ? 'btn' : 'btn btn-quiet'}
+              onClick={() => setMode('code')}
+            >
+              По коду
+            </button>
           </div>
 
           {error ? <div className="error-banner">{error}</div> : null}
@@ -104,8 +119,12 @@ export default function NewChatDialog({ onClose, onStartDirect, onCreateGroup }:
                 className="input"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="9 «Б», редколлегия, поход…"
+                placeholder="9О, редколлегия, поход…"
               />
+              <span className="field-hint">
+                Участников можно не выбирать: после создания появится код, по
+                которому остальные войдут сами.
+              </span>
             </label>
           ) : null}
 
@@ -122,53 +141,83 @@ export default function NewChatDialog({ onClose, onStartDirect, onCreateGroup }:
             </div>
           ) : null}
 
-          <div className="search-box">
-            <SearchIcon />
-            <input
-              className="input"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Найти человека"
-              type="search"
-              aria-label="Найти человека"
-            />
-          </div>
+          {mode === 'code' ? (
+            <label className="field">
+              <span className="field-label">Код группы</span>
+              <input
+                className="input join-code-input"
+                value={code}
+                onChange={(event) => setCode(event.target.value.toUpperCase())}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && code.trim()) {
+                    void run(() => onJoinByCode(code.trim()));
+                  }
+                }}
+                placeholder="CFH6QK"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                maxLength={12}
+                aria-label="Код группы"
+              />
+              <span className="field-hint">
+                Шесть символов от того, кто создал группу. Регистр и пробелы не важны.
+              </span>
+            </label>
+          ) : (
+            <>
+              <div className="search-box">
+                <SearchIcon />
+                <input
+                  className="input"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Найти человека"
+                  type="search"
+                  aria-label="Найти человека"
+                />
+              </div>
 
-          <div className="people-list">
-            {people.length === 0 ? (
-              <p className="list-section-title">
-                {search ? 'Никого не нашлось' : 'Кроме вас тут пока никого нет'}
-              </p>
-            ) : (
-              people.map((person) => {
-                const isSelected = selected.some((item) => item.id === person.id);
-                return (
-                  <button
-                    key={person.id}
-                    className={`person-row${isSelected ? ' is-selected' : ''}`}
-                    disabled={busy}
-                    onClick={() => {
-                      if (mode === 'group') togglePerson(person);
-                      else void run(() => onStartDirect(person.id));
-                    }}
-                  >
-                    <Avatar
-                      name={person.displayName}
-                      color={person.avatarColor}
-                      fileId={person.avatarFileId}
-                      size={36}
-                      online={person.online}
-                    />
-                    <div className="person-body">
-                      <div className="person-name">{person.displayName}</div>
-                      <div className="person-handle">@{person.username}</div>
-                    </div>
-                    {isSelected ? <span aria-hidden>✓</span> : null}
-                  </button>
-                );
-              })
-            )}
-          </div>
+              <div className="people-list">
+                {people.length === 0 ? (
+                  <p className="list-section-title">
+                    {search ? 'Никого не нашлось' : 'Кроме вас тут пока никого нет'}
+                  </p>
+                ) : (
+                  people.map((person) => {
+                    const isSelected = selected.some((item) => item.id === person.id);
+                    return (
+                      <button
+                        key={person.id}
+                        className={`person-row${isSelected ? ' is-selected' : ''}`}
+                        disabled={busy}
+                        onClick={() => {
+                          if (mode === 'group') togglePerson(person);
+                          else void run(() => onStartDirect(person.id));
+                        }}
+                      >
+                        <Avatar
+                          name={person.displayName}
+                          color={person.avatarColor}
+                          fileId={person.avatarFileId}
+                          size={36}
+                          online={person.online}
+                        />
+                        <div className="person-body">
+                          <div className="person-name">{person.displayName}</div>
+                          <div className="person-handle">
+                            @{person.username}
+                            {person.grade ? ` · ${person.grade}` : ''}
+                          </div>
+                        </div>
+                        {isSelected ? <span aria-hidden>✓</span> : null}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {mode === 'group' ? (
@@ -178,11 +227,25 @@ export default function NewChatDialog({ onClose, onStartDirect, onCreateGroup }:
             </button>
             <button
               className="btn"
-              disabled={busy || selected.length === 0 || title.trim().length === 0}
+              disabled={busy || title.trim().length === 0}
               onClick={() => void run(() => onCreateGroup(title.trim(), selected.map((p) => p.id)))}
             >
               {busy ? <span className="spinner" /> : null}
               Создать группу
+            </button>
+          </div>
+        ) : mode === 'code' ? (
+          <div className="modal-footer">
+            <button className="btn btn-quiet" onClick={onClose}>
+              Отмена
+            </button>
+            <button
+              className="btn"
+              disabled={busy || code.trim().length === 0}
+              onClick={() => void run(() => onJoinByCode(code.trim()))}
+            >
+              {busy ? <span className="spinner" /> : null}
+              Присоединиться
             </button>
           </div>
         ) : null}

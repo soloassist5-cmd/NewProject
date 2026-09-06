@@ -3,7 +3,13 @@ import { config } from '@/lib/config';
 import { sql, sqlOne } from '@/lib/db';
 import { handle, HttpError, json, readJson } from '@/lib/http';
 import { clientIp, rateLimit } from '@/lib/ratelimit';
-import { avatarColorFor, parseDisplayName, parsePassword, parseUsername } from '@/lib/validate';
+import {
+  avatarColorFor,
+  parseDisplayName,
+  parseGrade,
+  parsePassword,
+  parseUsername,
+} from '@/lib/validate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,8 +23,16 @@ export const POST = handle(async (request) => {
 
   const body = await readJson(request);
   const username = parseUsername(body.username);
-  const displayName = parseDisplayName(body.displayName);
   const password = parsePassword(body.password);
+  const grade = parseGrade(body.grade);
+
+  // Отображаемое имя при регистрации не спрашиваем — на входе только логин,
+  // пароль и класс. Пока человек не заполнит имя в профиле, его показывают
+  // по логину.
+  const displayName =
+    body.displayName === undefined || body.displayName === ''
+      ? username
+      : parseDisplayName(body.displayName);
 
   // В закрытом режиме нужен действующий код-приглашение.
   if (config.inviteOnly) {
@@ -45,8 +59,11 @@ export const POST = handle(async (request) => {
   const role = isFirstUser || (config.adminUsername && config.adminUsername === username) ? 'admin' : 'member';
 
   const created = await sqlOne<{ id: number }>`
-    INSERT INTO users (username, display_name, password_hash, avatar_color, role)
-    VALUES (${username}, ${displayName}, ${await hashPassword(password)}, ${avatarColorFor(username)}, ${role})
+    INSERT INTO users (username, display_name, grade, password_hash, avatar_color, role)
+    VALUES (
+      ${username}, ${displayName}, ${grade},
+      ${await hashPassword(password)}, ${avatarColorFor(username)}, ${role}
+    )
     RETURNING id
   `;
   if (!created) throw new HttpError(500, 'Не удалось создать аккаунт.');
@@ -54,6 +71,6 @@ export const POST = handle(async (request) => {
   await createSession(created.id, request.headers.get('user-agent') ?? '');
 
   return json({
-    user: { id: created.id, username, displayName, role },
+    user: { id: created.id, username, displayName, grade, role },
   }, 201);
 });

@@ -31,6 +31,52 @@ export function parseDisplayName(raw: unknown): string {
   return name;
 }
 
+/**
+ * Класс вида «9О», «11Э». Пустая строка допустима — так отмечают учителей и
+ * других сотрудников гимназии, у которых класса нет.
+ */
+export function parseGrade(raw: unknown): string {
+  if (raw === null || raw === undefined) return '';
+  if (typeof raw !== 'string') throw new ValidationError('Некорректно указан класс.');
+
+  const grade = raw.trim().toUpperCase().replace(/\s+/g, '');
+  if (grade === '') return '';
+
+  // Латинские «O», «E» и «C» выглядят как русские: приводим к кириллице,
+  // иначе «9O» с латинской O не совпал бы с «9О» ни в списке, ни в поиске.
+  const normalized = grade.replace(/O/g, 'О').replace(/E/g, 'Э').replace(/C/g, 'С');
+
+  const match = normalized.match(/^(\d{1,2})([А-Я])$/);
+  if (!match) throw new ValidationError('Класс указывается так: 9О, 11Э.');
+
+  const parallel = Number(match[1]);
+  const letter = match[2];
+
+  if (!(config.grades.parallels as readonly number[]).includes(parallel)) {
+    throw new ValidationError('В гимназии есть классы с 1 по 11.');
+  }
+  if (!(config.grades.letters as readonly string[]).includes(letter)) {
+    throw new ValidationError(`Литера класса — одна из: ${config.grades.letters.join(', ')}.`);
+  }
+
+  return `${parallel}${letter}`;
+}
+
+/** Код приглашения в группу: приводим к канону, чтобы регистр и пробелы не мешали. */
+export function parseJoinCode(raw: unknown): string {
+  if (typeof raw !== 'string') throw new ValidationError('Введите код группы.');
+
+  const code = raw.trim().toUpperCase().replace(/[\s-]/g, '');
+  if (code.length !== config.joinCode.length) {
+    throw new ValidationError(`Код состоит из ${config.joinCode.length} символов.`);
+  }
+  if (![...code].every((char) => config.joinCode.alphabet.includes(char))) {
+    throw new ValidationError('В коде есть символы, которых в кодах не бывает. Проверьте ещё раз.');
+  }
+
+  return code;
+}
+
 export function parsePassword(raw: unknown): string {
   if (typeof raw !== 'string') throw new ValidationError('Укажите пароль.');
   if (raw.length < 8) throw new ValidationError('Пароль должен быть не короче 8 символов.');

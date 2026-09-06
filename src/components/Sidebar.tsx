@@ -9,6 +9,7 @@ import type { ChatMessage, Conversation, Me, Person } from '@/lib/types';
 
 interface SidebarProps {
   me: Me;
+  schoolName: string;
   conversations: Conversation[];
   activeId: number | null;
   loading: boolean;
@@ -20,6 +21,7 @@ interface SidebarProps {
 
 export default function Sidebar({
   me,
+  schoolName,
   conversations,
   activeId,
   loading,
@@ -74,7 +76,10 @@ export default function Sidebar({
       <div className="sidebar-header">
         <div className="brand">
           <span className="brand-mark">П</span>
-          <span>Перемена</span>
+          <span className="brand-text">
+            <span className="brand-name">Перемена</span>
+            <span className="brand-school">{schoolName}</span>
+          </span>
         </div>
         <button
           className="btn-ghost"
@@ -151,7 +156,10 @@ export default function Sidebar({
           <Avatar name={me.displayName} color={me.avatarColor} fileId={me.avatarFileId} size={36} />
           <div style={{ minWidth: 0 }}>
             <div className="sidebar-me-name">{me.displayName}</div>
-            <div className="sidebar-me-status">@{me.username}</div>
+            <div className="sidebar-me-status">
+              @{me.username}
+              {me.grade ? ` · ${me.grade}` : ''}
+            </div>
           </div>
         </button>
       </div>
@@ -256,7 +264,10 @@ function SearchResults({
               />
               <div className="person-body">
                 <div className="person-name">{highlight(person.displayName, query)}</div>
-                <div className="person-handle">@{person.username}</div>
+                <div className="person-handle">
+                  @{person.username}
+                  {person.grade ? ` · ${person.grade}` : ''}
+                </div>
               </div>
             </button>
           ))}

@@ -1,7 +1,7 @@
 import { publish } from '@/lib/events';
 import { HttpError, json, readJson, withUser } from '@/lib/http';
 import { createGroup, ensureDm, getConversationSummary, listConversations } from '@/lib/queries';
-import { parseGroupTitle, parseId, parseIdList, ValidationError } from '@/lib/validate';
+import { parseGroupTitle, parseId, parseIdList } from '@/lib/validate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,10 +32,8 @@ export const POST = withUser(async (user, request) => {
   }
 
   const title = parseGroupTitle(body.title);
+  // Группу можно создать и пустой: остальные войдут по коду приглашения.
   const memberIds = parseIdList(body.memberIds ?? [], 'идентификатор участника');
-  if (memberIds.length === 0) {
-    throw new ValidationError('Добавьте в группу хотя бы одного человека.');
-  }
 
   const conversationId = await createGroup(user.id, title, memberIds);
   const conversation = await getConversationSummary(user.id, conversationId);

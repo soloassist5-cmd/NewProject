@@ -67,21 +67,23 @@ let dmId;
 let groupId;
 let firstMessageId;
 
-async function register(client, displayName) {
+async function register(client, displayName, grade = '9О') {
   const response = await client.post('/api/auth/register', {
     username: client.name,
     displayName,
+    grade,
     password: 'ochen-nadyozhnyy-parol',
   });
   assert.equal(response.status, 201, `регистрация ${client.name}: ${JSON.stringify(response.data)}`);
   client.id = response.data.user.id;
+  client.grade = response.data.user.grade;
 }
 
 describe('Перемена — проверка API', () => {
   before(async () => {
-    await register(anya, 'Аня Смирнова');
-    await register(petya, 'Петя Иванов');
-    await register(dasha, 'Даша Орлова');
+    await register(anya, 'Аня Смирнова', '9О');
+    await register(petya, 'Петя Иванов', '9Г');
+    await register(dasha, 'Даша Орлова', '11Э');
   });
 
   describe('Аккаунты', () => {
@@ -99,11 +101,61 @@ describe('Перемена — проверка API', () => {
       const fresh = new Client(`short_${suffix}`);
       const response = await fresh.post('/api/auth/register', {
         username: `short_${suffix}`,
-        displayName: 'Коротышка',
+        grade: '9О',
         password: '123',
       });
       assert.equal(response.status, 400);
       assert.match(response.data.error, /8 символов/);
+    });
+
+    it('регистрирует без отображаемого имени — по логину', async () => {
+      const fresh = new Client(`bezimeni_${suffix}`);
+      const response = await fresh.post('/api/auth/register', {
+        username: fresh.name,
+        grade: '7Г',
+        password: 'ochen-nadyozhnyy-parol',
+      });
+      assert.equal(response.status, 201);
+      assert.equal(response.data.user.displayName, fresh.name);
+      assert.equal(response.data.user.grade, '7Г');
+    });
+
+    it('сохраняет класс и отдаёт его в профиле', async () => {
+      const response = await dasha.get('/api/auth/me');
+      assert.equal(response.data.user.grade, '11Э');
+    });
+
+    it('разрешает регистрацию без класса — для сотрудников', async () => {
+      const teacher = new Client(`uchitel_${suffix}`);
+      const response = await teacher.post('/api/auth/register', {
+        username: teacher.name,
+        grade: '',
+        password: 'ochen-nadyozhnyy-parol',
+      });
+      assert.equal(response.status, 201);
+      assert.equal(response.data.user.grade, '');
+    });
+
+    it('отклоняет несуществующую литеру класса', async () => {
+      const fresh = new Client(`bukva_${suffix}`);
+      const response = await fresh.post('/api/auth/register', {
+        username: fresh.name,
+        grade: '9Ю',
+        password: 'ochen-nadyozhnyy-parol',
+      });
+      assert.equal(response.status, 400);
+      assert.match(response.data.error, /Литера/);
+    });
+
+    it('отклоняет несуществующую параллель', async () => {
+      const fresh = new Client(`parallel_${suffix}`);
+      const response = await fresh.post('/api/auth/register', {
+        username: fresh.name,
+        grade: '14О',
+        password: 'ochen-nadyozhnyy-parol',
+      });
+      assert.equal(response.status, 400);
+      assert.match(response.data.error, /с 1 по 11/);
     });
 
     it('не пускает с неверным паролем', async () => {
@@ -336,6 +388,110 @@ describe('Перемена — проверка API', () => {
 
     it('не позволяет выйти из личного диалога', async () => {
       const response = await anya.del(`/api/conversations/${dmId}`);
+      assert.equal(response.status, 400);
+    });
+  });
+
+  describe('Вход в группу по коду', () => {
+    let codeGroupId;
+    let code;
+
+    before(async () => {
+      // Группу можно создать пустой: остальные войдут по коду.
+      const created = await anya.post('/api/conversations', {
+        kind: 'group',
+        title: 'Поход',
+        memberIds: [],
+      });
+      assert.equal(created.status, 201);
+      codeGroupId = created.data.conversation.id;
+    });
+
+    it('выдаёт группе код сразу при создании', async () => {
+      const response = await anya.get(`/api/conversations/${codeGroupId}/code`);
+      assert.equal(response.status, 200);
+      code = response.data.code;
+      assert.equal(typeof code, 'string');
+      assert.equal(code.length, 6);
+    });
+
+    it('в коде нет символов, которые легко перепутать', async () => {
+      assert.doesNotMatch(code, /[O0I1L]/, 'O, 0, I, 1 и L в кодах не используются');
+    });
+
+    it('не показывает код постороннему', async () => {
+      const response = await dasha.get(`/api/conversations/${codeGroupId}/code`);
+      assert.equal(response.status, 404);
+    });
+
+    it('пускает в группу по коду', async () => {
+      const response = await dasha.post('/api/conversations/join', { code });
+      assert.equal(response.status, 200);
+      assert.equal(response.data.conversation.id, codeGroupId);
+      assert.equal(response.data.alreadyMember, false);
+
+      const members = await anya.get(`/api/conversations/${codeGroupId}/members`);
+      assert.ok(members.data.members.some((member) => member.id === dasha.id));
+    });
+
+    it('не обращает внимания на регистр и пробелы в коде', async () => {
+      const petyaJoin = await petya.post('/api/conversations/join', {
+        code: ` ${code.toLowerCase()} `,
+      });
+      assert.equal(petyaJoin.status, 200);
+      assert.equal(petyaJoin.data.conversation.id, codeGroupId);
+    });
+
+    it('повторный ввод кода просто открывает группу', async () => {
+      const response = await dasha.post('/api/conversations/join', { code });
+      assert.equal(response.status, 200);
+      assert.equal(response.data.alreadyMember, true);
+    });
+
+    it('оставляет запись о том, кто вошёл по коду', async () => {
+      const history = await anya.get(`/api/conversations/${codeGroupId}/messages`);
+      assert.ok(
+        history.data.messages.some(
+          (item) => item.kind === 'system' && item.body.includes('по коду'),
+        ),
+      );
+    });
+
+    it('отклоняет несуществующий код', async () => {
+      const response = await dasha.post('/api/conversations/join', { code: 'ZZZZZZ' });
+      assert.equal(response.status, 404);
+    });
+
+    it('отклоняет код неправильной длины', async () => {
+      const response = await dasha.post('/api/conversations/join', { code: 'ABC' });
+      assert.equal(response.status, 400);
+    });
+
+    it('не даёт обычному участнику сменить код', async () => {
+      const response = await dasha.post(`/api/conversations/${codeGroupId}/code`);
+      assert.equal(response.status, 403);
+    });
+
+    it('создатель меняет код, и старый перестаёт работать', async () => {
+      const changed = await anya.post(`/api/conversations/${codeGroupId}/code`);
+      assert.equal(changed.status, 200);
+      assert.notEqual(changed.data.code, code);
+
+      // Проверяем старым кодом от того, кто ещё не в группе.
+      const outsider = new Client(`chuzhoy_${suffix}`);
+      await register(outsider, 'Посторонний', '5О');
+
+      const withOld = await outsider.post('/api/conversations/join', { code });
+      assert.equal(withOld.status, 404, 'старый код больше не действует');
+
+      const withNew = await outsider.post('/api/conversations/join', {
+        code: changed.data.code,
+      });
+      assert.equal(withNew.status, 200);
+    });
+
+    it('у личного диалога кода нет', async () => {
+      const response = await anya.get(`/api/conversations/${dmId}/code`);
       assert.equal(response.status, 400);
     });
   });

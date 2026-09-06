@@ -4,6 +4,8 @@ export interface Me {
   id: number;
   username: string;
   displayName: string;
+  /** Класс вида «9О». У сотрудников гимназии пусто. */
+  grade: string;
   avatarColor: string;
   avatarFileId: number | null;
   bio: string;
@@ -14,6 +16,7 @@ export interface Person {
   id: number;
   username: string;
   displayName: string;
+  grade: string;
   avatarColor: string;
   avatarFileId: number | null;
   bio: string;

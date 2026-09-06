@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   username       TEXT        NOT NULL UNIQUE,          -- в нижнем регистре, латиница/цифры/_
   display_name   TEXT        NOT NULL,
   password_hash  TEXT        NOT NULL,
+  grade          TEXT        NOT NULL DEFAULT '',      -- «9О», «11Э» или пусто у сотрудников
   avatar_color   TEXT        NOT NULL DEFAULT 'violet',
   avatar_file_id BIGINT,                               -- FK добавляется ниже, после files
   bio            TEXT        NOT NULL DEFAULT '',
@@ -14,8 +15,12 @@ CREATE TABLE IF NOT EXISTS users (
   last_seen_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Колонка появилась позже таблицы: дописываем её в уже существующих базах.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS grade TEXT NOT NULL DEFAULT '';
+
 CREATE INDEX IF NOT EXISTS users_last_seen_idx ON users (last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS users_display_name_idx ON users (lower(display_name));
+CREATE INDEX IF NOT EXISTS users_grade_idx ON users (grade);
 
 -- Сессии. В куке лежит случайный токен, в базе — только его SHA-256.
 CREATE TABLE IF NOT EXISTS sessions (
@@ -59,8 +64,17 @@ CREATE TABLE IF NOT EXISTS conversations (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_message_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   -- 'меньший_id:больший_id' — гарантирует единственность личного диалога между двумя людьми
-  dm_key          TEXT        UNIQUE
+  dm_key          TEXT        UNIQUE,
+  -- Код приглашения в группу: по нему присоединяются, не дожидаясь, пока добавят вручную
+  join_code       TEXT        UNIQUE
 );
+
+-- Колонка появилась позже таблицы: дописываем её в уже существующих базах.
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS join_code TEXT;
+
+DO $$ BEGIN
+  ALTER TABLE conversations ADD CONSTRAINT conversations_join_code_key UNIQUE (join_code);
+EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL; END $$;
 
 CREATE INDEX IF NOT EXISTS conversations_last_message_idx ON conversations (last_message_at DESC);
 

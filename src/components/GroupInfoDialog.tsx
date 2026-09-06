@@ -30,9 +30,37 @@ export default function GroupInfoDialog({
   const [candidates, setCandidates] = useState<Person[]>([]);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [joinCode, setJoinCode] = useState<string | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const myMembership = members.find((member) => member.id === me.id);
   const canManage = myMembership?.role === 'owner' || me.role === 'admin';
+
+  // Код группы виден только участникам, поэтому запрашиваем его при открытии.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<{ code: string | null }>(`/api/conversations/${conversation.id}/code`)
+      .then((data) => {
+        if (!cancelled) setJoinCode(data.code);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation.id]);
+
+  async function copyCode() {
+    if (!joinCode) return;
+    try {
+      await navigator.clipboard.writeText(joinCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } catch {
+      // Буфер обмена доступен не везде (нужен https) — код и так виден на экране.
+      setError('Не удалось скопировать. Перепишите код вручную.');
+    }
+  }
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -92,7 +120,7 @@ export default function GroupInfoDialog({
           {canManage ? (
             <label className="field">
               <span className="field-label">Название</span>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="rename-row">
                 <input
                   className="input"
                   value={title}
@@ -112,6 +140,40 @@ export default function GroupInfoDialog({
               </div>
             </label>
           ) : null}
+
+          <div className="field">
+            <span className="field-label">Код группы</span>
+            <div className="join-code-row">
+              <code className="join-code">{joinCode ?? '······'}</code>
+              <button
+                className="btn btn-quiet"
+                onClick={() => void copyCode()}
+                disabled={!joinCode}
+              >
+                {codeCopied ? 'Скопировано' : 'Копировать'}
+              </button>
+            </div>
+            <span className="field-hint">
+              Передайте код тем, кого зовёте: по нему они сами войдут в группу.
+            </span>
+            {canManage ? (
+              <button
+                className="btn-ghost"
+                style={{ alignSelf: 'flex-start' }}
+                onClick={() => {
+                  if (!window.confirm('Выдать новый код? Старый перестанет работать.')) return;
+                  void act(async () => {
+                    const data = await api.post<{ code: string }>(
+                      `/api/conversations/${conversation.id}/code`,
+                    );
+                    setJoinCode(data.code);
+                  });
+                }}
+              >
+                Сменить код
+              </button>
+            ) : null}
+          </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
             <input

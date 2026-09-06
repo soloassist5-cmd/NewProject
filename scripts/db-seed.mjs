@@ -12,6 +12,7 @@ import pg from 'pg';
 const scrypt = promisify(scryptCallback);
 const SCRYPT = { N: 32768, r: 8, p: 1, maxmem: 96 * 1024 * 1024 };
 const PASSWORD = 'peremena-demo';
+const GROUP_CODE = 'GYMN24';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -26,10 +27,11 @@ async function hashPassword(password) {
 }
 
 const PEOPLE = [
-  { username: 'anya', displayName: 'Аня Смирнова', color: 'violet', bio: '9 «Б», редколлегия' },
-  { username: 'petya', displayName: 'Петя Иванов', color: 'blue', bio: '9 «Б»' },
-  { username: 'dasha', displayName: 'Даша Орлова', color: 'teal', bio: '9 «Б», волейбол' },
-  { username: 'kostya', displayName: 'Костя Лебедев', color: 'amber', bio: '9 «Б»' },
+  { username: 'anya', displayName: 'Аня Смирнова', grade: '9О', color: 'violet', bio: 'редколлегия' },
+  { username: 'petya', displayName: 'Петя Иванов', grade: '9О', color: 'blue', bio: '' },
+  { username: 'dasha', displayName: 'Даша Орлова', grade: '9Г', color: 'teal', bio: 'волейбол' },
+  { username: 'kostya', displayName: 'Костя Лебедев', grade: '10Э', color: 'amber', bio: '' },
+  { username: 'ivanova', displayName: 'Мария Ивановна', grade: '', color: 'green', bio: 'учитель алгебры' },
 ];
 
 const isLocal = /@(localhost|127\.0\.0\.1)/.test(connectionString);
@@ -46,11 +48,13 @@ try {
 
   for (const person of PEOPLE) {
     const { rows } = await client.query(
-      `INSERT INTO users (username, display_name, password_hash, avatar_color, bio)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name
+      `INSERT INTO users (username, display_name, grade, password_hash, avatar_color, bio)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (username) DO UPDATE SET
+         display_name = EXCLUDED.display_name,
+         grade = EXCLUDED.grade
        RETURNING id`,
-      [person.username, person.displayName, hash, person.color, person.bio],
+      [person.username, person.displayName, person.grade, hash, person.color, person.bio],
     );
     ids[person.username] = Number(rows[0].id);
   }
@@ -71,11 +75,15 @@ try {
     [dmId, ids.anya, ids.petya],
   );
 
-  // Общий чат класса.
+  // Общий чат класса. Код фиксированный, чтобы его удобно было продиктовать
+  // при показе; символы взяты из того же алфавита, что и у настоящих кодов
+  // (без похожих друг на друга O/0 и I/1/L).
   const { rows: groupRows } = await client.query(
-    `INSERT INTO conversations (kind, title, created_by, avatar_color)
-     VALUES ('group', '9 «Б»', $1, 'green') RETURNING id`,
-    [ids.anya],
+    `INSERT INTO conversations (kind, title, created_by, avatar_color, join_code)
+     VALUES ('group', '9О', $1, 'green', $2)
+     ON CONFLICT (join_code) DO UPDATE SET last_message_at = now()
+     RETURNING id`,
+    [ids.anya, GROUP_CODE],
   );
   const groupId = Number(groupRows[0].id);
 
@@ -96,9 +104,14 @@ try {
     [groupId, ids.petya, 'Понял, спасибо'],
   ];
 
+  // Скрипт запускают повторно, поэтому реплики не дублируем.
   for (const [conversationId, senderId, body] of script) {
     await client.query(
-      `INSERT INTO messages (conversation_id, sender_id, body) VALUES ($1, $2, $3)`,
+      `INSERT INTO messages (conversation_id, sender_id, body)
+       SELECT $1, $2, $3
+       WHERE NOT EXISTS (
+         SELECT 1 FROM messages m WHERE m.conversation_id = $1 AND m.body = $3
+       )`,
       [conversationId, senderId, body],
     );
   }
@@ -111,6 +124,7 @@ try {
   console.log('Демо-данные записаны.');
   console.log(`Аккаунты: ${PEOPLE.map((p) => p.username).join(', ')}`);
   console.log(`Пароль у всех: ${PASSWORD}`);
+  console.log(`Код группы «9О» для проверки входа по коду: ${GROUP_CODE}`);
 } catch (error) {
   console.error('Не удалось записать демо-данные:', error.message);
   process.exitCode = 1;

@@ -9,7 +9,14 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { imageSize } from '../src/lib/imagesize.ts';
 import { initials } from '../src/lib/format.ts';
-import { parseEmoji, parseMessageBody, parseUsername, ValidationError } from '../src/lib/validate.ts';
+import {
+  parseEmoji,
+  parseGrade,
+  parseJoinCode,
+  parseMessageBody,
+  parseUsername,
+  ValidationError,
+} from '../src/lib/validate.ts';
 
 describe('Размеры картинки из заголовка', () => {
   it('читает PNG', () => {
@@ -81,5 +88,58 @@ describe('Проверка ввода', () => {
   it('отклоняет буквы и две эмодзи подряд', () => {
     assert.throws(() => parseEmoji('да'), ValidationError);
     assert.throws(() => parseEmoji('👍👍'), ValidationError);
+  });
+});
+
+describe('Класс гимназии', () => {
+  it('принимает класс с любой из литер', () => {
+    assert.equal(parseGrade('9О'), '9О');
+    assert.equal(parseGrade('11Г'), '11Г');
+    assert.equal(parseGrade('1Э'), '1Э');
+  });
+
+  it('чистит регистр и пробелы', () => {
+    assert.equal(parseGrade('  9 о '), '9О');
+  });
+
+  it('подменяет латиницу, похожую на кириллицу', () => {
+    // «9O» с латинской O выглядит как «9О», но не совпало бы с ним нигде.
+    assert.equal(parseGrade('9O'), '9О');
+    assert.equal(parseGrade('11E'), '11Э');
+  });
+
+  it('пустая строка — это сотрудник без класса', () => {
+    assert.equal(parseGrade(''), '');
+    assert.equal(parseGrade(null), '');
+  });
+
+  it('отклоняет чужую литеру и несуществующую параллель', () => {
+    assert.throws(() => parseGrade('9Ю'), ValidationError);
+    assert.throws(() => parseGrade('14О'), ValidationError);
+    assert.throws(() => parseGrade('0О'), ValidationError);
+  });
+
+  it('отклоняет бессмыслицу', () => {
+    assert.throws(() => parseGrade('класс'), ValidationError);
+    assert.throws(() => parseGrade('9'), ValidationError);
+  });
+});
+
+describe('Код группы', () => {
+  it('приводит к верхнему регистру и убирает пробелы с дефисами', () => {
+    assert.equal(parseJoinCode(' cfh6qk '), 'CFH6QK');
+    assert.equal(parseJoinCode('CFH-6QK'), 'CFH6QK');
+  });
+
+  it('отклоняет неверную длину', () => {
+    assert.throws(() => parseJoinCode('ABC'), ValidationError);
+    assert.throws(() => parseJoinCode('ABCDEFGH'), ValidationError);
+  });
+
+  it('отклоняет символы, которых в кодах не бывает', () => {
+    // Похожие друг на друга O/0 и I/1/L из алфавита исключены.
+    assert.throws(() => parseJoinCode('CFH6QO'), ValidationError);
+    assert.throws(() => parseJoinCode('CFH6Q0'), ValidationError);
+    assert.throws(() => parseJoinCode('CFH6QI'), ValidationError);
   });
 });

@@ -4,19 +4,26 @@ import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar';
 import { CloseIcon, LogoutIcon } from './Icons';
 import { api, ApiError } from '@/lib/client';
+import type { GradesConfig } from './Messenger';
 import type { Attachment, Me } from '@/lib/types';
 
 const COLORS = ['violet', 'blue', 'teal', 'green', 'amber', 'orange', 'rose', 'plum'];
 
 interface ProfileDialogProps {
   me: Me;
+  grades: GradesConfig;
   onClose: () => void;
   onUpdated: (me: Me) => void;
 }
 
-export default function ProfileDialog({ me, onClose, onUpdated }: ProfileDialogProps) {
+export default function ProfileDialog({ me, grades, onClose, onUpdated }: ProfileDialogProps) {
   const [displayName, setDisplayName] = useState(me.displayName);
   const [bio, setBio] = useState(me.bio);
+  // Класс хранится строкой «9О», а выбирается двумя списками.
+  const [parallel, setParallel] = useState(me.grade ? me.grade.replace(/\D+$/, '') : '');
+  const [letter, setLetter] = useState(
+    me.grade ? me.grade.replace(/^\d+/, '') : (grades.letters[0] ?? ''),
+  );
   const [avatarColor, setAvatarColor] = useState(me.avatarColor);
   const [avatarFileId, setAvatarFileId] = useState(me.avatarFileId);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -57,7 +64,13 @@ export default function ProfileDialog({ me, onClose, onUpdated }: ProfileDialogP
     setError(null);
     setSaved(false);
 
-    const payload: Record<string, unknown> = { displayName, bio, avatarColor, avatarFileId };
+    const payload: Record<string, unknown> = {
+      displayName,
+      bio,
+      avatarColor,
+      avatarFileId,
+      grade: parallel === '' ? '' : `${parallel}${letter}`,
+    };
     if (newPassword) {
       payload.newPassword = newPassword;
       payload.currentPassword = currentPassword;
@@ -104,7 +117,7 @@ export default function ProfileDialog({ me, onClose, onUpdated }: ProfileDialogP
             <Avatar name={displayName} color={avatarColor} fileId={avatarFileId} size={64} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <button className="btn btn-quiet" onClick={() => fileInputRef.current?.click()}>
-                Загрузить фото
+                {avatarFileId ? 'Заменить фото' : 'Выбрать из галереи'}
               </button>
               {avatarFileId ? (
                 <button className="btn-ghost" onClick={() => setAvatarFileId(null)}>
@@ -112,6 +125,8 @@ export default function ProfileDialog({ me, onClose, onUpdated }: ProfileDialogP
                 </button>
               ) : null}
             </div>
+            {/* Одна картинка: без multiple и без capture — телефон предложит
+                галерею, а не сразу камеру. */}
             <input
               ref={fileInputRef}
               type="file"
@@ -156,12 +171,44 @@ export default function ProfileDialog({ me, onClose, onUpdated }: ProfileDialogP
               className="input"
               value={bio}
               onChange={(event) => setBio(event.target.value)}
-              placeholder="Например: 9 «Б», редколлегия"
+              placeholder="Например: редколлегия, волейбол"
             />
           </label>
 
           <div className="field">
-            <span className="field-label">Имя пользователя</span>
+            <span className="field-label">Класс</span>
+            <div className="grade-picker">
+              <select
+                className="input"
+                value={parallel}
+                onChange={(event) => setParallel(event.target.value)}
+                aria-label="Параллель"
+              >
+                <option value="">{grades.staffLabel}</option>
+                {grades.parallels.map((value) => (
+                  <option key={value} value={value}>
+                    {value} класс
+                  </option>
+                ))}
+              </select>
+              <select
+                className="input"
+                value={letter}
+                onChange={(event) => setLetter(event.target.value)}
+                disabled={parallel === ''}
+                aria-label="Литера класса"
+              >
+                {grades.letters.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="field">
+            <span className="field-label">Логин</span>
             <input className="input" value={`@${me.username}`} disabled />
             <span className="field-hint">Его менять нельзя — по нему вас находят.</span>
           </div>

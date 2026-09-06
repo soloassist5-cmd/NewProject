@@ -47,6 +47,11 @@ export function useEventStream({ onEvent, onStatusChange }: Options): void {
 
     const connect = () => {
       if (stopped) return;
+      if (reopenTimer) {
+        clearTimeout(reopenTimer);
+        reopenTimer = null;
+      }
+      source?.close();
 
       source = new EventSource('/api/stream');
 
@@ -74,11 +79,30 @@ export function useEventStream({ onEvent, onStatusChange }: Options): void {
       source.addEventListener('hello', () => statusRef.current?.(true));
     };
 
+    /**
+     * Возвращение в приложение.
+     *
+     * В свёрнутой вкладке браузер сильно замедляет таймеры, поэтому после
+     * планового закрытия потока переподключение может подвиснуть на минуту.
+     * Для телефона это обычное дело — приложение сворачивают постоянно, — так
+     * что при возвращении поднимаем соединение сами, не дожидаясь таймера.
+     */
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || stopped) return;
+      if (!source || source.readyState === EventSource.CLOSED) connect();
+    };
+
     connect();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onVisible);
+    window.addEventListener('pageshow', onVisible);
 
     return () => {
       stopped = true;
       if (reopenTimer) clearTimeout(reopenTimer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onVisible);
+      window.removeEventListener('pageshow', onVisible);
       source?.close();
     };
   }, []);

@@ -19,6 +19,7 @@ export interface SessionUser {
   id: number;
   username: string;
   display_name: string;
+  grade: string;
   avatar_color: string;
   avatar_file_id: number | null;
   bio: string;
@@ -100,7 +101,7 @@ export async function currentUser(): Promise<SessionUser | null> {
   if (!token) return null;
 
   const user = await sqlOne<SessionUser>`
-    SELECT u.id, u.username, u.display_name, u.avatar_color, u.avatar_file_id, u.bio, u.role
+    SELECT u.id, u.username, u.display_name, u.grade, u.avatar_color, u.avatar_file_id, u.bio, u.role
     FROM sessions s
     JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ${tokenFingerprint(token)}

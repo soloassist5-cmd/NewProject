@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { config } from './config';
 import { pool, sql, sqlOne } from './db';
 import { HttpError } from './http';
@@ -7,6 +8,8 @@ export interface PublicUser {
   id: number;
   username: string;
   displayName: string;
+  /** Класс вида «9О». У сотрудников гимназии пусто. */
+  grade: string;
   avatarColor: string;
   avatarFileId: number | null;
   bio: string;
@@ -93,6 +96,7 @@ interface UserRow {
   id: number;
   username: string;
   display_name: string;
+  grade: string;
   avatar_color: string;
   avatar_file_id: number | null;
   bio: string;
@@ -104,6 +108,7 @@ function toPublicUser(row: UserRow): PublicUser {
     id: row.id,
     username: row.username,
     displayName: row.display_name,
+    grade: row.grade ?? '',
     avatarColor: row.avatar_color,
     avatarFileId: row.avatar_file_id,
     bio: row.bio,
@@ -117,7 +122,7 @@ export async function listPeople(viewerId: number, search: string): Promise<Publ
   const pattern = `%${search.trim().toLowerCase()}%`;
   const rows = search.trim()
     ? await sql<UserRow>`
-        SELECT id, username, display_name, avatar_color, avatar_file_id, bio, last_seen_at
+        SELECT id, username, display_name, grade, avatar_color, avatar_file_id, bio, last_seen_at
         FROM users
         WHERE id <> ${viewerId}
           AND (lower(display_name) LIKE ${pattern} OR username LIKE ${pattern})
@@ -125,7 +130,7 @@ export async function listPeople(viewerId: number, search: string): Promise<Publ
         LIMIT 50
       `
     : await sql<UserRow>`
-        SELECT id, username, display_name, avatar_color, avatar_file_id, bio, last_seen_at
+        SELECT id, username, display_name, grade, avatar_color, avatar_file_id, bio, last_seen_at
         FROM users
         WHERE id <> ${viewerId}
         ORDER BY last_seen_at DESC
@@ -136,7 +141,7 @@ export async function listPeople(viewerId: number, search: string): Promise<Publ
 
 export async function getUser(userId: number): Promise<PublicUser | null> {
   const row = await sqlOne<UserRow>`
-    SELECT id, username, display_name, avatar_color, avatar_file_id, bio, last_seen_at
+    SELECT id, username, display_name, grade, avatar_color, avatar_file_id, bio, last_seen_at
     FROM users WHERE id = ${userId}
   `;
   return row ? toPublicUser(row) : null;
@@ -164,6 +169,7 @@ interface ConversationRow {
   partner_id: number | null;
   partner_username: string | null;
   partner_display_name: string | null;
+  partner_grade: string | null;
   partner_avatar_color: string | null;
   partner_avatar_file_id: number | null;
   partner_bio: string | null;
@@ -191,6 +197,7 @@ const CONVERSATION_SELECT = `
     p.id AS partner_id,
     p.username AS partner_username,
     p.display_name AS partner_display_name,
+    p.grade AS partner_grade,
     p.avatar_color AS partner_avatar_color,
     p.avatar_file_id AS partner_avatar_file_id,
     p.bio AS partner_bio,
@@ -218,6 +225,7 @@ function toConversationSummary(row: ConversationRow): ConversationSummary {
           id: row.partner_id,
           username: row.partner_username ?? '',
           displayName: row.partner_display_name ?? '',
+          grade: row.partner_grade ?? '',
           avatarColor: row.partner_avatar_color ?? 'violet',
           avatarFileId: row.partner_avatar_file_id,
           bio: row.partner_bio ?? '',
@@ -276,7 +284,7 @@ export async function getConversationSummary(
 
 export async function listMembers(conversationId: number): Promise<(PublicUser & { role: string })[]> {
   const rows = await sql<UserRow & { role: string }>`
-    SELECT u.id, u.username, u.display_name, u.avatar_color, u.avatar_file_id, u.bio, u.last_seen_at, cm.role
+    SELECT u.id, u.username, u.display_name, u.grade, u.avatar_color, u.avatar_file_id, u.bio, u.last_seen_at, cm.role
     FROM conversation_members cm
     JOIN users u ON u.id = cm.user_id
     WHERE cm.conversation_id = ${conversationId}
@@ -322,6 +330,42 @@ export async function ensureDm(userId: number, otherId: number): Promise<number>
   return created.id;
 }
 
+/** Случайный код приглашения из алфавита без похожих друг на друга символов. */
+function randomJoinCode(): string {
+  const { length, alphabet } = config.joinCode;
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += alphabet[randomInt(alphabet.length)];
+  }
+  return code;
+}
+
+/**
+ * Присваивает группе свободный код.
+ *
+ * Уникальность гарантирует ограничение в базе, поэтому при столкновении просто
+ * пробуем следующий код, а не проверяем занятость заранее — между проверкой и
+ * записью код мог бы успеть занять кто-то другой.
+ */
+async function assignJoinCode(conversationId: number): Promise<string> {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const code = randomJoinCode();
+    const updated = await sqlOne<{ join_code: string }>`
+      UPDATE conversations SET join_code = ${code}
+      WHERE id = ${conversationId}
+        AND NOT EXISTS (SELECT 1 FROM conversations other WHERE other.join_code = ${code})
+      RETURNING join_code
+    `;
+    if (updated) return updated.join_code;
+  }
+  throw new HttpError(500, 'Не удалось подобрать свободный код. Попробуйте ещё раз.');
+}
+
+/** Выдаёт группе новый код: старый перестаёт работать. */
+export async function regenerateJoinCode(conversationId: number): Promise<string> {
+  return assignJoinCode(conversationId);
+}
+
 export async function createGroup(
   ownerId: number,
   title: string,
@@ -351,7 +395,59 @@ export async function createGroup(
     [created.id, ...ids],
   );
 
+  // Код выдаётся сразу: по нему в группу заходят, не дожидаясь приглашения.
+  await assignJoinCode(created.id);
+
   return created.id;
+}
+
+/**
+ * Присоединяет к группе по коду.
+ *
+ * Возвращает и признак того, что человек уже состоял в группе: тогда его надо
+ * просто открыть, не объявляя о новом участнике.
+ */
+export async function joinByCode(
+  userId: number,
+  code: string,
+): Promise<{ conversationId: number; alreadyMember: boolean; title: string }> {
+  const group = await sqlOne<{ id: number; title: string | null }>`
+    SELECT id, title FROM conversations WHERE join_code = ${code} AND kind = 'group'
+  `;
+  if (!group) throw new HttpError(404, 'Группа с таким кодом не найдена. Проверьте код.');
+
+  const existing = await sqlOne<{ user_id: number }>`
+    SELECT user_id FROM conversation_members
+    WHERE conversation_id = ${group.id} AND user_id = ${userId}
+  `;
+  if (existing) {
+    return { conversationId: group.id, alreadyMember: true, title: group.title ?? 'Группа' };
+  }
+
+  const size = await sqlOne<{ count: number }>`
+    SELECT count(*)::int AS count FROM conversation_members WHERE conversation_id = ${group.id}
+  `;
+  if ((size?.count ?? 0) >= config.limits.groupMembers) {
+    throw new HttpError(400, 'В группе уже максимум участников.');
+  }
+
+  await sql`
+    INSERT INTO conversation_members (conversation_id, user_id, role)
+    VALUES (${group.id}, ${userId}, 'member')
+    ON CONFLICT DO NOTHING
+  `;
+
+  return { conversationId: group.id, alreadyMember: false, title: group.title ?? 'Группа' };
+}
+
+/** Код группы виден только тем, кто в ней состоит. */
+export async function getJoinCode(conversationId: number): Promise<string | null> {
+  const row = await sqlOne<{ join_code: string | null }>`
+    SELECT join_code FROM conversations WHERE id = ${conversationId}
+  `;
+  // У групп, созданных до появления кодов, его ещё нет — выдаём при первом запросе.
+  if (row && !row.join_code) return assignJoinCode(conversationId);
+  return row?.join_code ?? null;
 }
 
 // ──────────────────────────── Сообщения ────────────────────────────

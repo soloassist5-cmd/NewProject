@@ -4,7 +4,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: `${config.appName} — ${config.appTagline}`,
-  description: 'Небольшой мессенджер для общения внутри школы.',
+  description: `Мессенджер для общения внутри ${config.schoolName}.`,
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, title: config.appName, statusBarStyle: 'default' },
 };
