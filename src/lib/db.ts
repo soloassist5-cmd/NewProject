@@ -12,19 +12,52 @@ declare global {
   var __peremenaPool: Pool | undefined;
 }
 
-function createPool(): Pool {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error(
-      'Не задана переменная окружения DATABASE_URL. Скопируйте .env.example в .env.local и укажите адрес базы.',
-    );
+/**
+ * Имена переменных, под которыми может лежать адрес базы.
+ *
+ * Интеграции называют её по-разному: Neon через Vercel кладёт `DATABASE_URL`,
+ * Vercel Postgres — `POSTGRES_URL`, Supabase иногда `POSTGRES_PRISMA_URL`.
+ * Требовать одно конкретное имя — верный способ получить пустой белый экран
+ * после подключения базы «по кнопке», поэтому берём первое, что нашлось.
+ * Адреса без пула (`*_UNPOOLED`, `*_NON_POOLING`) идут последними: они рабочие,
+ * но на serverless быстро упираются в лимит соединений.
+ */
+const CONNECTION_VARIABLES = [
+  'DATABASE_URL',
+  'POSTGRES_URL',
+  'POSTGRES_PRISMA_URL',
+  'DATABASE_POSTGRES_URL',
+  'DATABASE_URL_UNPOOLED',
+  'POSTGRES_URL_NON_POOLING',
+];
+
+/** Ошибка настройки: приложение развёрнуто, но не сказано, куда подключаться. */
+export class ConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigError';
   }
+}
+
+export function connectionString(): string {
+  for (const name of CONNECTION_VARIABLES) {
+    const value = process.env[name];
+    if (value && value.trim()) return value.trim();
+  }
+  throw new ConfigError(
+    'Не задан адрес базы данных. Добавьте в настройках проекта переменную ' +
+      'DATABASE_URL со строкой подключения и пересоберите приложение.',
+  );
+}
+
+function createPool(): Pool {
+  const connection = connectionString();
 
   // Локальный Postgres обычно без TLS, облачный (Neon и подобные) — с ним.
-  const isLocal = /@(localhost|127\.0\.0\.1)/.test(connectionString);
+  const isLocal = /@(localhost|127\.0\.0\.1)/.test(connection);
 
   return new Pool({
-    connectionString,
+    connectionString: connection,
     ssl: isLocal ? undefined : { rejectUnauthorized: false },
     // На serverless каждый инстанс держит свой пул, поэтому он маленький.
     max: Number(process.env.DB_POOL_MAX ?? 5),

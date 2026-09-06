@@ -2,7 +2,7 @@ import { createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } fr
 import { promisify } from 'node:util';
 import { cookies } from 'next/headers';
 import { config } from './config';
-import { sql, sqlOne } from './db';
+import { ConfigError, sql, sqlOne } from './db';
 
 const scrypt = promisify(scryptCallback) as (
   password: string | Buffer,
@@ -30,7 +30,10 @@ function authSecret(): string {
   const secret = process.env.AUTH_SECRET;
   if (secret && secret.length >= 16) return secret;
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('Не задана переменная AUTH_SECRET — без неё нельзя безопасно выдавать сессии.');
+    throw new ConfigError(
+      'Не задана переменная AUTH_SECRET — без неё нельзя безопасно выдавать сессии. ' +
+        'Добавьте её в настройках проекта (случайная строка от 32 символов) и пересоберите приложение.',
+    );
   }
   // В разработке разрешаем работать без секрета, но предупреждаем.
   return 'peremena-dev-secret-not-for-production';

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { currentUser, type SessionUser } from './auth';
-import { sqlOne } from './db';
+import { ConfigError, sqlOne } from './db';
 import { ValidationError } from './validate';
 
 /** Ошибка с HTTP-кодом: бросается в обработчиках, ловится в withUser/handle. */
@@ -26,6 +26,15 @@ export function fail(status: number, message: string): NextResponse {
 export function toResponse(error: unknown): NextResponse {
   if (error instanceof ValidationError) return fail(400, error.message);
   if (error instanceof HttpError) return fail(error.status, error.message);
+
+  // Приложение развёрнуто, но не настроено. Показываем это прямо: «что-то пошло
+  // не так» заставило бы искать причину в логах, хотя чинится она одной
+  // переменной в настройках. Секретов в тексте нет — только чего не хватает.
+  if (error instanceof ConfigError) {
+    console.error('Приложение не настроено:', error.message);
+    return fail(503, error.message);
+  }
+
   console.error('Необработанная ошибка в API:', error);
   return fail(500, 'Что-то пошло не так на сервере. Попробуйте ещё раз.');
 }
