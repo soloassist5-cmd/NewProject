@@ -129,10 +129,25 @@ export function parseEmoji(raw: unknown): string {
   return emoji;
 }
 
-/** Разбирает положительное целое из строки запроса. */
+/**
+ * Разбирает положительное целое из строки запроса.
+ *
+ * Разбор строгий: `parseInt` молча превратил бы «1 OR 1=1» в 1, а «12abc» в 12.
+ * Само по себе это не давало бы доступа к чужому (запросы параметризованы, а
+ * права проверяются отдельно), но такой мусор должен отвергаться сразу, а не
+ * приниматься за случайно похожий идентификатор.
+ */
 export function parseId(raw: unknown, field = 'id'): number {
-  const id = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10);
-  if (!Number.isInteger(id) || id <= 0) throw new ValidationError(`Некорректный ${field}.`);
+  if (typeof raw === 'number') {
+    if (!Number.isSafeInteger(raw) || raw <= 0) throw new ValidationError(`Некорректный ${field}.`);
+    return raw;
+  }
+
+  const text = String(raw ?? '').trim();
+  if (!/^[0-9]{1,15}$/.test(text)) throw new ValidationError(`Некорректный ${field}.`);
+
+  const id = Number(text);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new ValidationError(`Некорректный ${field}.`);
   return id;
 }
 

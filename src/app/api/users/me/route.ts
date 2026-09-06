@@ -4,6 +4,7 @@ import { sql, sqlOne } from '@/lib/db';
 import { publish } from '@/lib/events';
 import { HttpError, json, readJson, withUser } from '@/lib/http';
 import { getUser } from '@/lib/queries';
+import { rateLimit } from '@/lib/ratelimit';
 import { parseBio, parseDisplayName, parseGrade, parseId, parsePassword } from '@/lib/validate';
 
 export const runtime = 'nodejs';
@@ -65,6 +66,15 @@ export const PATCH = withUser(async (user, request) => {
 
   // Смена пароля требует подтверждения текущим — на случай чужого открытого окна.
   if (body.newPassword !== undefined) {
+    // Именно этот случай и надо ограничивать: добравшись до незапертого
+    // ноутбука, текущий пароль можно перебирать, чтобы сменить его и забрать
+    // аккаунт себе насовсем. Хозяин потом даже не войдёт.
+    await rateLimit(`password-change:${user.id}`, {
+      limit: 5,
+      windowSeconds: 15 * 60,
+      message: 'Слишком много попыток сменить пароль. Подождите 15 минут.',
+    });
+
     const newPassword = parsePassword(body.newPassword);
     const stored = await sqlOne<{ password_hash: string }>`
       SELECT password_hash FROM users WHERE id = ${user.id}

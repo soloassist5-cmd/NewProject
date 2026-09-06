@@ -67,6 +67,25 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
+/**
+ * Хеш от случайной строки — им сверяются, когда такого логина нет.
+ *
+ * Без этого проверка пароля пропускалась бы для несуществующего аккаунта, и
+ * ответ приходил бы в двадцать раз быстрее. По одному времени ответа можно
+ * перебрать, кто зарегистрирован в гимназии, даже не имея своего аккаунта, —
+ * поэтому работа выполняется одинаковая в обоих случаях.
+ *
+ * Считается один раз при первом входе и дальше берётся из кеша.
+ */
+let dummyHashPromise: Promise<string> | null = null;
+
+export function dummyPasswordHash(): Promise<string> {
+  if (!dummyHashPromise) {
+    dummyHashPromise = hashPassword(randomBytes(32).toString('hex'));
+  }
+  return dummyHashPromise;
+}
+
 /** В базе лежит не сам токен, а HMAC от него: утечка таблицы не даёт готовых кук. */
 function tokenFingerprint(token: string): string {
   return createHmac('sha256', authSecret()).update(token).digest('hex');

@@ -19,6 +19,15 @@ export const POST = withUser(async (user, request) => {
     message: 'Слишком много загрузок подряд. Немного подождите.',
   });
 
+  // Отсекаем заведомо слишком большое до чтения тела: иначе гигабайтная
+  // «загрузка» сначала целиком окажется в памяти и только потом будет отвергнута.
+  // Заголовку доверять нельзя, поэтому настоящий размер проверяется и ниже.
+  const declaredSize = Number(request.headers.get('content-length') ?? 0);
+  if (declaredSize > config.limits.fileSizeBytes * 1.2) {
+    const megabytes = Math.round(config.limits.fileSizeBytes / (1024 * 1024));
+    throw new HttpError(413, `Файл больше ${megabytes} МБ.`);
+  }
+
   const form = await request.formData().catch(() => null);
   const file = form?.get('file');
   if (!(file instanceof File)) throw new HttpError(400, 'Файл не приложен.');

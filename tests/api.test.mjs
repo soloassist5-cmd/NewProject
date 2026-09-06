@@ -19,6 +19,8 @@ class Client {
   constructor(name) {
     this.name = name;
     this.cookie = '';
+    // Полная строка Set-Cookie — по ней проверяются флаги защиты.
+    this.rawSetCookie = '';
   }
 
   async request(method, path, body, raw = false) {
@@ -35,8 +37,8 @@ class Client {
 
     const setCookie = response.headers.get('set-cookie');
     if (setCookie) {
-      const pair = setCookie.split(';')[0];
-      this.cookie = pair;
+      this.rawSetCookie = setCookie;
+      this.cookie = setCookie.split(';')[0];
     }
 
     if (raw) return response;
@@ -683,6 +685,161 @@ describe('Перемена — проверка API', () => {
         password: 'ochen-nadyozhnyy-parol',
       });
       assert.equal(login.status, 401, 'старый пароль больше не подходит');
+    });
+  });
+
+  describe('Безопасность', () => {
+    it('нельзя выдать себе роль администратора при регистрации', async () => {
+      const impostor = new Client(`samozvanets_${suffix}`);
+      const response = await impostor.post('/api/auth/register', {
+        username: impostor.name,
+        password: 'ochen-nadyozhnyy-parol',
+        grade: '9О',
+        role: 'admin',
+      });
+      assert.equal(response.status, 201);
+      const me = await impostor.get('/api/auth/me');
+      assert.equal(me.data.user.role, 'member', 'роль назначает сервер, а не запрос');
+    });
+
+    it('нельзя поднять себе права через изменение профиля', async () => {
+      await petya.patch('/api/users/me', { role: 'admin', username: 'root', id: 1 });
+      const me = await petya.get('/api/auth/me');
+      assert.equal(me.data.user.role, 'member');
+      assert.equal(me.data.user.username, petya.name, 'логин менять нельзя');
+    });
+
+    it('сессионная кука недоступна скриптам и защищена от CSRF', async () => {
+      const fresh = new Client(anya.name);
+      await fresh.post('/api/auth/login', {
+        username: anya.name,
+        password: 'ochen-nadyozhnyy-parol',
+      });
+      assert.match(fresh.rawSetCookie, /HttpOnly/i, 'без HttpOnly куку украл бы любой скрипт');
+      assert.match(fresh.rawSetCookie, /SameSite=Lax/i);
+    });
+
+    it('подделанный токен сессии не работает', async () => {
+      const response = await fetch(`${BASE}/api/conversations`, {
+        headers: { cookie: 'peremena_session=poddelannyy-token' },
+      });
+      assert.equal(response.status, 401);
+    });
+
+    it('в ответах нет хешей паролей и токенов', async () => {
+      const profile = await anya.get('/api/auth/me');
+      const people = await anya.get('/api/users');
+      const both = JSON.stringify(profile.data) + JSON.stringify(people.data);
+      assert.doesNotMatch(both, /password/i);
+      assert.doesNotMatch(both, /token/i);
+    });
+
+    it('мусор вместо идентификатора отвергается, а не округляется', async () => {
+      // parseInt превратил бы «1 OR 1=1» в 1 и «12abc» в 12.
+      // Пустой сегмент сюда не входит: такой адрес Next схлопывает сам,
+      // до разбора идентификатора дело не доходит.
+      for (const bad of ['1 OR 1=1', '12abc', '-5', '1.5', '0', '99999999999999999999']) {
+        const response = await anya.get(
+          `/api/conversations/${encodeURIComponent(bad)}/messages`,
+        );
+        assert.ok(
+          response.status === 400 || response.status === 404,
+          `«${bad}» должен отвергаться, а вернулось ${response.status}`,
+        );
+      }
+    });
+
+    it('инъекция в поиске не ломает базу', async () => {
+      for (const payload of ["'; DROP TABLE users; --", "' OR '1'='1"]) {
+        const response = await anya.get(`/api/search?q=${encodeURIComponent(payload)}`);
+        assert.equal(response.status, 200);
+      }
+      const alive = await anya.get('/api/users');
+      assert.equal(alive.status, 200, 'таблица users должна быть на месте');
+    });
+
+    it('перебор текущего пароля при смене ограничен', async () => {
+      const victim = new Client(`zhertva_${suffix}`);
+      await register(victim, 'Жертва', '8О');
+
+      let blocked = false;
+      for (let i = 0; i < 12; i++) {
+        const attempt = await victim.patch('/api/users/me', {
+          newPassword: 'parol-zloumyshlennika',
+          currentPassword: `podbor-${i}`,
+        });
+        if (attempt.status === 429) {
+          blocked = true;
+          break;
+        }
+      }
+      assert.ok(blocked, 'иначе с чужого незапертого ноутбука аккаунт уводят перебором');
+    });
+
+    it('перебор пароля при входе блокируется', async () => {
+      const target = new Client(`mishen_${suffix}`);
+      await register(target, 'Мишень', '8Г');
+
+      const attacker = new Client(target.name);
+      let blocked = false;
+      for (let i = 0; i < 15; i++) {
+        const attempt = await attacker.post('/api/auth/login', {
+          username: target.name,
+          password: `podbor-${i}`,
+        });
+        if (attempt.status === 429) {
+          blocked = true;
+          break;
+        }
+      }
+      assert.ok(blocked);
+    });
+
+    it('несуществующий логин отвечает так же долго, как существующий', async () => {
+      // Иначе по времени ответа перебирается список зарегистрированных.
+      const measure = async (username) => {
+        const times = [];
+        for (let i = 0; i < 5; i++) {
+          const started = performance.now();
+          await fetch(`${BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ username, password: `nevernyy-${i}` }),
+          });
+          times.push(performance.now() - started);
+        }
+        return times.sort((a, b) => a - b)[2];
+      };
+
+      const missing = await measure(`prizrak_${suffix}`);
+      const present = await measure(dasha.name);
+      const ratio = present / missing;
+      assert.ok(
+        ratio > 0.4 && ratio < 2.5,
+        `время ответа не должно выдавать наличие аккаунта (отношение ${ratio.toFixed(2)})`,
+      );
+    });
+
+    it('страница отдаёт заголовки безопасности', async () => {
+      const response = await fetch(BASE);
+      const csp = response.headers.get('content-security-policy') ?? '';
+
+      assert.match(csp, /nonce-[a-f0-9]{16,}/, 'скрипты разрешаются по одноразовому ключу');
+      assert.doesNotMatch(
+        csp.split(';').find((part) => part.includes('script-src')) ?? '',
+        /unsafe-inline|unsafe-eval/,
+        'в рабочей сборке послаблений для скриптов быть не должно',
+      );
+      assert.match(csp, /frame-ancestors 'none'/, 'защита от подмены нажатий');
+      assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+      assert.equal(response.headers.get('x-frame-options'), 'DENY');
+      assert.ok(response.headers.get('referrer-policy'));
+    });
+
+    it('одноразовый ключ политики меняется на каждый ответ', async () => {
+      const first = (await fetch(BASE)).headers.get('content-security-policy');
+      const second = (await fetch(BASE)).headers.get('content-security-policy');
+      assert.notEqual(first, second, 'иначе ключ можно подсмотреть и переиспользовать');
     });
   });
 

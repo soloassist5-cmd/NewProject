@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { config } from '@/lib/config';
 import './globals.css';
 
@@ -32,11 +33,15 @@ try {
 } catch (error) {}
 `;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Одноразовый ключ из middleware: без него браузер не выполнит этот скрипт,
+  // потому что политика запрещает любые скрипты без nonce.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <html lang="ru" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>{children}</body>
     </html>

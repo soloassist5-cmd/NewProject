@@ -1,4 +1,4 @@
-import { createSession, pruneExpiredSessions, verifyPassword } from '@/lib/auth';
+import { createSession, dummyPasswordHash, pruneExpiredSessions, verifyPassword } from '@/lib/auth';
 import { config } from '@/lib/config';
 import { sqlOne } from '@/lib/db';
 import { handle, HttpError, json, readJson } from '@/lib/http';
@@ -31,8 +31,10 @@ export const POST = handle(async (request) => {
   `;
 
   // Одинаковый ответ и для несуществующего имени, и для неверного пароля —
-  // чтобы нельзя было перебором узнать, кто зарегистрирован.
-  const ok = user ? await verifyPassword(password, user.password_hash) : false;
+  // чтобы нельзя было перебором узнать, кто зарегистрирован. Проверку пароля
+  // выполняем всегда, даже когда логина нет: иначе ответ приходил бы заметно
+  // быстрее и выдавал бы отсутствие аккаунта одним лишь временем.
+  const ok = await verifyPassword(password, user?.password_hash ?? (await dummyPasswordHash()));
   if (!user || !ok) throw new HttpError(401, 'Неверное имя пользователя или пароль.');
 
   await createSession(user.id, request.headers.get('user-agent') ?? '');
