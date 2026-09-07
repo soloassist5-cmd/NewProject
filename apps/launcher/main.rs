@@ -14,7 +14,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-const SITE: &str = "https://gimroom-wi-ls1ze.vercel.app";
+const SITE: &str = "https://gimroom.vercel.app";
 
 /// Браузеры на движке Chromium в порядке предпочтения. Edge стоит первым:
 /// он есть в Windows из коробки, доустанавливать ничего не нужно.

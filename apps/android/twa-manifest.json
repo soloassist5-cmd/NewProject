@@ -1,6 +1,6 @@
 {
   "packageId": "ru.kirovgymnasium.gimroom",
-  "host": "gimroom-wi-ls1ze.vercel.app",
+  "host": "gimroom.vercel.app",
   "name": "ГимРум — Кировская гимназия",
   "launcherName": "ГимРум",
   "display": "standalone",
@@ -13,18 +13,18 @@
   "backgroundColor": "#EEF3F8",
   "enableNotifications": true,
   "startUrl": "/",
-  "iconUrl": "https://gimroom-wi-ls1ze.vercel.app/emblem.png",
-  "maskableIconUrl": "https://gimroom-wi-ls1ze.vercel.app/emblem.png",
+  "iconUrl": "https://gimroom.vercel.app/emblem.png",
+  "maskableIconUrl": "https://gimroom.vercel.app/emblem.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "./android.keystore",
     "alias": "gimroom"
   },
-  "appVersionName": "1.2.0",
-  "appVersionCode": 3,
+  "appVersionName": "1.3.0",
+  "appVersionCode": 4,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://gimroom-wi-ls1ze.vercel.app/manifest.webmanifest",
+  "webManifestUrl": "https://gimroom.vercel.app/manifest.webmanifest",
   "fallbackType": "customtabs",
   "features": {},
   "alphaDependencies": {
@@ -33,12 +33,12 @@
   "enableSiteSettingsShortcut": false,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://gimroom-wi-ls1ze.vercel.app/",
+  "fullScopeUrl": "https://gimroom.vercel.app/",
   "minSdkVersion": 23,
   "orientation": "default",
   "fingerprints": [],
   "additionalTrustedOrigins": [],
   "retainedBundles": [],
   "displayOverride": [],
-  "appVersion": "1.2.0"
+  "appVersion": "1.3.0"
 }

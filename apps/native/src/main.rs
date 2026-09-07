@@ -21,7 +21,7 @@ use tao::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
 use tao::window::{UserAttentionType, WindowBuilder};
 use wry::{WebContext, WebViewBuilder};
 
-const SITE: &str = "https://gimroom-wi-ls1ze.vercel.app";
+const SITE: &str = "https://gimroom.vercel.app";
 
 /// Что страница может попросить у окна.
 #[derive(Debug)]

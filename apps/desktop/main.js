@@ -15,7 +15,7 @@ const path = require('node:path');
 
 // Адрес сайта. Можно переопределить переменной GIMROOM_URL — удобно, если
 // гимназия переедет на свой домен.
-const SITE_URL = process.env.GIMROOM_URL || 'https://gimroom-wi-ls1ze.vercel.app';
+const SITE_URL = process.env.GIMROOM_URL || 'https://gimroom.vercel.app';
 const SITE_ORIGIN = new URL(SITE_URL).origin;
 
 let mainWindow = null;

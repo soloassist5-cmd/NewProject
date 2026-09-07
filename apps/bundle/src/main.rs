@@ -28,7 +28,7 @@ const WEBVIEW_LOADER: &[u8] = include_bytes!("../../native/dist/WebView2Loader.d
 /// Меняется при каждой новой версии — по нему видно, что файлы пора обновить.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const SITE: &str = "https://gimroom-wi-ls1ze.vercel.app";
+const SITE: &str = "https://gimroom.vercel.app";
 
 fn app_directory() -> Option<PathBuf> {
     let base = env::var_os("LOCALAPPDATA")?;
