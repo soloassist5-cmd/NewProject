@@ -1,0 +1,22 @@
+[package]
+name = "gimroom"
+version = "1.0.0"
+edition = "2021"
+description = "ГимРум — мессенджер МБОУ Кировская Гимназия"
+
+[dependencies]
+# Окно и цикл событий.
+tao = "0.30"
+# Обёртка над системным движком страниц: в Windows это WebView2, который
+# ставится вместе с Edge и есть в любой Windows 10 и 11.
+wry = "0.46"
+
+[build-dependencies]
+winresource = "0.1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

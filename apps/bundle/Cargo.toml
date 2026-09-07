@@ -1,0 +1,19 @@
+[package]
+name = "gimroom-bundle"
+version = "1.0.0"
+edition = "2021"
+description = "ГимРум — один файл, который разворачивает приложение и запускает его"
+
+[[bin]]
+name = "gimroom-setup"
+path = "src/main.rs"
+
+[build-dependencies]
+winresource = "0.1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

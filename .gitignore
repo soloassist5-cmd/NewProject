@@ -45,3 +45,6 @@ apps/desktop/dist/
 apps/launcher/*.exe
 apps/launcher/*.res
 apps/launcher/icon.ico
+apps/native/target/
+apps/native/dist/
+apps/bundle/target/
