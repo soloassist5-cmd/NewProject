@@ -1008,6 +1008,18 @@ describe('ГимРум — проверка API', () => {
       uchitel.id = login.data.user.id;
     });
 
+    it('учителю под файлы отведено больше, чем ученику', async () => {
+      const forStudent = await anya.get('/api/files');
+      const forTeacher = await uchitel.get('/api/files');
+
+      assert.equal(forStudent.status, 200);
+      assert.equal(forTeacher.status, 200);
+      assert.ok(
+        forTeacher.data.storage.quotaBytes > forStudent.data.storage.quotaBytes,
+        'учителю раздавать материалы классу, ученику — пересылать картинки',
+      );
+    });
+
     it('учителя видно учителем, а не безымянным аккаунтом', async () => {
       const found = await anya.get(`/api/users?search=${uchitel.name}`);
       const person = found.data.people.find((item) => item.username === uchitel.name);

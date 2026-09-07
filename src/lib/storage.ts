@@ -32,7 +32,18 @@ export function formatBytes(bytes: number): string {
   return `${megabytes < 10 ? megabytes.toFixed(1).replace('.', ',') : Math.round(megabytes)} МБ`;
 }
 
-export async function storageUsage(userId: number): Promise<StorageUsage> {
+/**
+ * Чья это квота.
+ *
+ * Учителю и администратору отведено больше: им раздавать классу материалы,
+ * а не пересылать картинки. Считается по роли из базы, не по слову клиента.
+ */
+function quotaFor(role: string) {
+  return role === 'member' ? config.storage.student : config.storage.staff;
+}
+
+/** Занятое и свободное место — одним запросом. */
+async function measure(userId: number) {
   const row = await sqlOne<{ used: string; today: string; total: string }>`
     SELECT
       COALESCE(SUM(size) FILTER (WHERE owner_id = ${userId}), 0) AS used,
@@ -43,10 +54,17 @@ export async function storageUsage(userId: number): Promise<StorageUsage> {
     FROM files
   `;
 
-  const used = Number(row?.used ?? 0);
-  const today = Number(row?.today ?? 0);
-  const total = Number(row?.total ?? 0);
-  const { perUserBytes, perDayBytes, totalBytes } = config.storage;
+  return {
+    used: Number(row?.used ?? 0),
+    today: Number(row?.today ?? 0),
+    total: Number(row?.total ?? 0),
+  };
+}
+
+export async function storageUsage(userId: number, role: string): Promise<StorageUsage> {
+  const { used, today, total } = await measure(userId);
+  const { perUserBytes, perDayBytes } = quotaFor(role);
+  const { totalBytes } = config.storage;
 
   return {
     usedBytes: used,
@@ -65,21 +83,10 @@ export async function storageUsage(userId: number): Promise<StorageUsage> {
  * Проверка идёт до записи файла в базу: сказать «не поместилось» после того,
  * как файл уже занял место, — значит не ограничить ничего.
  */
-export async function assertCanUpload(userId: number, size: number): Promise<void> {
-  const row = await sqlOne<{ used: string; today: string; total: string }>`
-    SELECT
-      COALESCE(SUM(size) FILTER (WHERE owner_id = ${userId}), 0) AS used,
-      COALESCE(SUM(size) FILTER (
-        WHERE owner_id = ${userId} AND created_at > now() - interval '1 day'
-      ), 0) AS today,
-      COALESCE(SUM(size), 0) AS total
-    FROM files
-  `;
-
-  const used = Number(row?.used ?? 0);
-  const today = Number(row?.today ?? 0);
-  const total = Number(row?.total ?? 0);
-  const { perUserBytes, perDayBytes, totalBytes } = config.storage;
+export async function assertCanUpload(userId: number, role: string, size: number): Promise<void> {
+  const { used, today, total } = await measure(userId);
+  const { perUserBytes, perDayBytes } = quotaFor(role);
+  const { totalBytes } = config.storage;
 
   if (total + size > totalBytes) {
     throw new HttpError(

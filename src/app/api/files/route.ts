@@ -14,7 +14,9 @@ export const dynamic = 'force-dynamic';
  * передаётся при отправке сообщения.
  */
 /** Сколько места занято — для строки в профиле. */
-export const GET = withUser(async (user) => json({ storage: await storageUsage(user.id) }));
+export const GET = withUser(async (user) =>
+  json({ storage: await storageUsage(user.id, user.role) }),
+);
 
 export const POST = withUser(async (user, request) => {
   await rateLimit(`upload:${user.id}`, {
@@ -50,7 +52,7 @@ export const POST = withUser(async (user, request) => {
   if (buffer.length > config.limits.fileSizeBytes) throw new HttpError(413, 'Файл слишком большой.');
 
   // Место в базе не бесконечно, и кончается оно сразу у всех: см. lib/storage.
-  await assertCanUpload(user.id, buffer.length);
+  await assertCanUpload(user.id, user.role, buffer.length);
 
   const dimensions = mime.startsWith('image/') ? imageSize(buffer, mime) : null;
   const name = (file.name || 'файл').slice(0, 200);
