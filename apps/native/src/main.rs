@@ -17,11 +17,19 @@ use std::process::Command;
 
 use tao::dpi::LogicalSize;
 use tao::event::{Event, WindowEvent};
-use tao::event_loop::{ControlFlow, EventLoop};
-use tao::window::WindowBuilder;
+use tao::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
+use tao::window::{UserAttentionType, WindowBuilder};
 use wry::{WebContext, WebViewBuilder};
 
 const SITE: &str = "https://gimroom-wi-ls1ze.vercel.app";
+
+/// Что страница может попросить у окна.
+#[derive(Debug)]
+enum AppEvent {
+    /// Пришло сообщение, а окно не на виду.
+    Notify,
+}
+
 /// Размер окна: привычный на большом мониторе, по месту — на маленьком.
 ///
 /// Считаем от рабочей области, а не от всего экрана: иначе на ноутбуке с
@@ -63,7 +71,7 @@ fn open_in_browser() {
 }
 
 fn main() {
-    let event_loop = EventLoop::new();
+    let event_loop: EventLoop<AppEvent> = EventLoopBuilder::with_user_event().build();
 
     let window = match WindowBuilder::new()
         .with_title("ГимРум")
@@ -78,12 +86,25 @@ fn main() {
         }
     };
 
+    // Мигать значком в панели задач можно только из потока событий, поэтому
+    // страница шлёт сюда сообщение, а разбирает его цикл ниже.
+    let proxy = event_loop.create_proxy();
+
     // Куки и локальное хранилище остаются между запусками: вход не должен
     // спрашиваться заново каждое утро.
     let mut context = WebContext::new(data_directory());
     let builder = WebViewBuilder::with_web_context(&mut context)
         .with_url(SITE)
-        .with_incognito(false);
+        .with_incognito(false)
+        // Метка для страницы: по ней мессенджер понимает, что он в нашем окне,
+        // и отдаёт уведомления сюда, а не пытается показать их сам — WebView2
+        // веб-уведомления не показывает.
+        .with_initialization_script("window.__gimroomNative = true;")
+        .with_ipc_handler(move |request| {
+            if request.body().contains("\"type\":\"notify\"") {
+                let _ = proxy.send_event(AppEvent::Notify);
+            }
+        });
 
     let webview = match builder.build(&window) {
         Ok(webview) => webview,
@@ -97,14 +118,24 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
 
-        if let Event::WindowEvent {
-            event: WindowEvent::CloseRequested,
-            ..
-        } = event
-        {
-            // webview должен пережить окно, иначе Windows ругается при закрытии.
-            let _ = &webview;
-            *control_flow = ControlFlow::Exit;
+        match event {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                // webview должен пережить окно, иначе Windows ругается при закрытии.
+                let _ = &webview;
+                *control_flow = ControlFlow::Exit;
+            }
+            // Пришло новое сообщение, а окно не на виду: мигаем значком в
+            // панели задач. Windows сама подсветит его до тех пор, пока в окно
+            // не заглянут, — привычное поведение для мессенджера.
+            Event::UserEvent(AppEvent::Notify) => {
+                if !window.is_focused() {
+                    window.request_user_attention(Some(UserAttentionType::Informational));
+                }
+            }
+            _ => {}
         }
     });
 }

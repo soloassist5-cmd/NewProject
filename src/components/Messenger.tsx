@@ -8,6 +8,7 @@ import PersonDialog from './PersonDialog';
 import ProfileDialog from './ProfileDialog';
 import Sidebar from './Sidebar';
 import { api } from '@/lib/client';
+import { notifyNativeHost } from '@/lib/native';
 import type {
   ChatMessage,
   Conversation,
@@ -153,6 +154,7 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
     return () => clearInterval(timer);
   }, [refreshConversations]);
 
+
   /**
    * Возвращение в приложение после сворачивания.
    *
@@ -242,35 +244,98 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
     [markRead],
   );
 
-  /** Уведомление о сообщении, пока окно свёрнуто или открыт другой чат. */
+  /**
+   * Нажатие на уведомление.
+   *
+   * На телефоне уведомление показывает service worker, поэтому и нажатие
+   * приходит от него — сообщением, а не событием на странице. Если мессенджер
+   * был закрыт, чат передаётся в адресе.
+   */
+  useEffect(() => {
+    const fromNotification = (event: MessageEvent) => {
+      if (event.data?.type !== 'open-conversation') return;
+      const id = Number(event.data.conversationId);
+      if (Number.isSafeInteger(id) && id > 0) void openConversation(id);
+    };
+
+    navigator.serviceWorker?.addEventListener('message', fromNotification);
+
+    const requested = Number(new URLSearchParams(window.location.search).get('chat'));
+    if (Number.isSafeInteger(requested) && requested > 0) {
+      void openConversation(requested);
+      // Убираем параметр, чтобы обновление страницы не открывало тот же чат снова.
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
+    return () => navigator.serviceWorker?.removeEventListener('message', fromNotification);
+  }, [openConversation]);
+
+  /**
+   * Уведомление о сообщении, пока окно свёрнуто или открыт другой чат.
+   *
+   * Три разных способа показать одно и то же, и все нужны:
+   *
+   * 1. Своё окно на Windows (наше приложение на WebView2) само уведомления не
+   *    показывает — их должна показать программа-хозяин, поэтому отправляем ей
+   *    сообщение и она мигает значком в панели задач.
+   * 2. На Android конструктор `new Notification` запрещён вовсе: Chrome требует
+   *    service worker. Раньше это молча падало в catch — уведомлений на
+   *    телефонах не было совсем, ни в приложении, ни в браузере.
+   * 3. На настольных браузерах работает конструктор — он и остаётся запасным.
+   */
   const notify = useCallback(
     (message: ChatMessage, conversation: Conversation | undefined) => {
       if (message.senderId === me.id) return;
       if (conversation?.muted) return;
       if (windowFocused.current && activeIdRef.current === message.conversationId) return;
+
+      const title =
+        conversation?.kind === 'group'
+          ? `${message.senderName} · ${conversation.title}`
+          : (message.senderName ?? 'Новое сообщение');
+
+      const body = (
+        message.attachments.length > 0 && !message.body ? 'Вложение' : message.body
+      ).slice(0, 140);
+
+      // 1. Наше окно на Windows.
+      if (notifyNativeHost(title, body, message.conversationId)) return;
+
       if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
 
-      const title = conversation?.kind === 'group'
-        ? `${message.senderName} · ${conversation.title}`
-        : (message.senderName ?? 'Новое сообщение');
+      const options: NotificationOptions = {
+        body,
+        // Тег схлопывает подряд идущие уведомления из одного чата в одно.
+        tag: `gimroom-${message.conversationId}`,
+        icon: '/emblem.png',
+        badge: '/mark.svg',
+        data: { conversationId: message.conversationId },
+      };
 
-      const body = message.attachments.length > 0 && !message.body ? 'Вложение' : message.body;
+      // 2. Телефоны: только через service worker.
+      void (async () => {
+        const registration = await navigator.serviceWorker?.getRegistration();
+        if (registration) {
+          try {
+            await registration.showNotification(title, options);
+            return;
+          } catch {
+            // Не вышло — пробуем обычный конструктор ниже.
+          }
+        }
 
-      try {
-        const notification = new Notification(title, {
-          body: body.slice(0, 140),
-          // Тег схлопывает подряд идущие уведомления из одного чата в одно.
-          tag: `gimroom-${message.conversationId}`,
-          icon: '/mark.svg',
-        });
-        notification.onclick = () => {
-          window.focus();
-          void openConversation(message.conversationId);
-          notification.close();
-        };
-      } catch {
-        // Некоторые браузеры запрещают конструктор — не беда.
-      }
+        // 3. Настольные браузеры.
+        try {
+          const notification = new Notification(title, options);
+          notification.onclick = () => {
+            window.focus();
+            void openConversation(message.conversationId);
+            notification.close();
+          };
+        } catch {
+          // Совсем никак — молчим, но это уже не наш случай.
+        }
+      })();
     },
     [me.id, openConversation],
   );

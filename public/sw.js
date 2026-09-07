@@ -86,6 +86,35 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+/*
+ * Нажатие на уведомление.
+ *
+ * На Android уведомления показывает именно service worker — значит и нажатие
+ * приходит сюда, а не на страницу. Если мессенджер уже открыт, поднимаем его
+ * окно и просим открыть нужный чат; если закрыт — открываем заново.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const conversationId = event.notification.data?.conversationId;
+
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+      for (const client of windows) {
+        if (!client.url.startsWith(self.location.origin)) continue;
+        await client.focus();
+        client.postMessage({ type: 'open-conversation', conversationId });
+        return;
+      }
+
+      // Открытого окна нет — запускаем мессенджер и передаём чат в адресе.
+      const target = conversationId ? `/?chat=${conversationId}` : '/';
+      await self.clients.openWindow(target);
+    })(),
+  );
+});
+
 /** На случай, если офлайн-страница почему-то не попала в кэш. */
 function offlineFallback() {
   return new Response('<h1>Нет связи</h1><p>Проверьте интернет и обновите страницу.</p>', {
