@@ -128,6 +128,8 @@ export default function Sidebar({
 
       {!connected ? <div className="connection-banner">Нет связи с сервером — переподключаемся…</div> : null}
 
+      <NotificationPrompt />
+
       <div className="conversation-list">
         {results ? (
           <SearchResults
@@ -180,6 +182,71 @@ export default function Sidebar({
         </button>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Предложение включить уведомления.
+ *
+ * Раньше разрешение спрашивалось только кнопкой в профиле, и до неё почти
+ * никто не доходил: уведомления просто не приходили, а почему — непонятно.
+ * Браузер разрешает спрашивать только в ответ на нажатие, поэтому здесь
+ * именно кнопка, а не автоматический запрос при загрузке.
+ *
+ * Полоска показывается один раз: закрыл — больше не возвращается.
+ */
+function NotificationPrompt() {
+  const [state, setState] = useState<'hidden' | 'offer' | 'busy'>('hidden');
+
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'default') return;
+    try {
+      if (localStorage.getItem('gimroom-notifications-asked') === 'yes') return;
+    } catch {
+      // Приватный режим — ничего страшного, просто предложим ещё раз.
+    }
+    setState('offer');
+  }, []);
+
+  if (state === 'hidden') return null;
+
+  const dismiss = () => {
+    setState('hidden');
+    try {
+      localStorage.setItem('gimroom-notifications-asked', 'yes');
+    } catch {
+      // Не сохранилось — предложим в следующий раз, это не беда.
+    }
+  };
+
+  return (
+    <div className="notify-prompt">
+      <div className="notify-prompt-text">
+        Включить уведомления о новых сообщениях?
+        <span className="field-hint">Иначе о сообщении узнаете, только открыв мессенджер.</span>
+      </div>
+      <div className="notify-prompt-actions">
+        <button
+          className="btn btn-small"
+          disabled={state === 'busy'}
+          onClick={async () => {
+            setState('busy');
+            try {
+              await Notification.requestPermission();
+            } catch {
+              // Браузер отказался спрашивать — полоску всё равно убираем.
+            }
+            dismiss();
+          }}
+        >
+          Включить
+        </button>
+        <button className="btn btn-quiet btn-small" onClick={dismiss}>
+          Не надо
+        </button>
+      </div>
+    </div>
   );
 }
 

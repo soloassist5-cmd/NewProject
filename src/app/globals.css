@@ -1365,6 +1365,38 @@ a {
   border-top: 1px solid var(--border);
 }
 
+/* Предложение включить уведомления — над списком чатов. */
+.notify-prompt {
+  margin: 0 12px 8px;
+  padding: 11px 13px;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.notify-prompt-text {
+  font-size: 13.5px;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.notify-prompt-text .field-hint {
+  display: block;
+  margin-top: 3px;
+  font-weight: 400;
+}
+
+.notify-prompt-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.notify-prompt-actions .btn {
+  flex: 1;
+  justify-content: center;
+}
+
 /* Флажок с пояснением под ним — «чужой компьютер» на экране входа. */
 .checkbox-row {
   display: flex;
