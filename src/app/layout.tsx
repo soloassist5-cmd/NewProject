@@ -33,6 +33,21 @@ try {
 } catch (error) {}
 `;
 
+/**
+ * Регистрирует service worker — он отвечает за понятный экран без сети и за
+ * то, чтобы оболочка не скачивалась заново при каждом открытии.
+ *
+ * Регистрируем после загрузки страницы: сам мессенджер важнее, и отнимать у
+ * него сеть в первые секунды незачем.
+ */
+const swScript = `
+if ('serviceWorker' in navigator) {
+  addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () {});
+  });
+}
+`;
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Одноразовый ключ из middleware: без него браузер не выполнит этот скрипт,
   // потому что политика запрещает любые скрипты без nonce.
@@ -42,6 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="ru" suppressHydrationWarning>
       <head>
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: swScript }} />
       </head>
       <body>{children}</body>
     </html>

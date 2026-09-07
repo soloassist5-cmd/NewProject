@@ -1,0 +1,37 @@
+# Сборка настольного «ГимРума» под Windows.
+#
+# Собирается портативная папка (--dir): её кладут куда угодно и запускают
+# ГимРум.exe без установки. Полноценный установщик (NSIS) требует Wine, если
+# собирать не на Windows, поэтому здесь его нет — при необходимости соберите
+# командой `electron-builder --win nsis` на самой Windows.
+
+appId: ru.kirovgymnasium.gimroom
+productName: ГимРум
+copyright: МБОУ Кировская Гимназия
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - main.js
+  - offline.html
+  - build/icon.png
+  - package.json
+
+# Без asar-архива. Electron 30+ сверяет контрольную сумму asar с записью внутри
+# exe, а записать её умеет только rcedit под Windows (или Wine). Обычная папка
+# с файлами такой сверки не требует и ведёт себя точно так же.
+asar: false
+
+win:
+  icon: build/icon.ico
+  # x64 покрывает всё, что стоит в школьных компьютерных классах.
+  target:
+    - target: dir
+      arch:
+        - x64
+
+# Подписи нет: сертификат стоит денег и для раздачи внутри школы не нужен.
+# Windows покажет предупреждение SmartScreen при первом запуске — это ожидаемо.
+forceCodeSigning: false

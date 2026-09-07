@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>ГимРум — нет связи</title>
+    <style>
+      /* Страница показывается без сети, поэтому всё своё: ни шрифтов, ни стилей
+         снаружи подтянуть неоткуда. */
+      :root {
+        color-scheme: light dark;
+        --bg: #005888;
+        --card: #ffffff;
+        --text: #0e1a24;
+        --muted: #566a7b;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b1219;
+          --card: #131c26;
+          --text: #e7eef5;
+          --muted: #9fb1c1;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      .card {
+        width: min(360px, 100%);
+        padding: 28px 24px 24px;
+        border-radius: 18px;
+        background: var(--card);
+        text-align: center;
+        box-shadow: 0 16px 40px rgb(9 40 62 / 0.24);
+      }
+
+      img {
+        width: 72px;
+        height: 72px;
+        margin-bottom: 14px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+        font-weight: 650;
+      }
+
+      p {
+        margin: 0 0 18px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      /* Ссылка, а не кнопка со скриптом: политика безопасности сайта запрещает
+         любые скрипты в разметке, и здесь они не нужны. */
+      a.retry {
+        display: block;
+        padding: 12px 16px;
+        border-radius: 12px;
+        background: #005888;
+        color: #fff;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      a.retry:active {
+        opacity: 0.85;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <img src="build/icon.png" alt="" width="72" height="72" />
+      <h1>Нет связи с интернетом</h1>
+      <p>
+        Сообщения отправятся, как только появится сеть. Проверьте Wi-Fi или мобильный интернет
+        и попробуйте ещё раз.
+      </p>
+      <p style="font-size:13px;color:var(--muted)">Закройте и откройте приложение снова, когда появится сеть.</p>
+    </div>
+  </body>
+</html>

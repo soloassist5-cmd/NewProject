@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ru.kirovgymnasium.gimroom",
+      "sha256_cert_fingerprints": [
+        "20:24:EA:A0:28:DE:5C:0E:36:0A:E5:7A:2F:01:5E:85:32:98:14:C6:CD:E5:0B:56:7D:75:48:5D:22:4C:3E:8B"
+      ]
+    }
+  }
+]

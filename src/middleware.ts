@@ -28,6 +28,10 @@ export function middleware(request: NextRequest) {
     "media-src 'self' blob:",
     "font-src 'self'",
     "connect-src 'self'",
+    // Service worker: без явного разрешения он унаследовал бы script-src, где
+    // стоит strict-dynamic — а тот отменяет 'self' и заблокировал бы /sw.js.
+    "worker-src 'self'",
+    "manifest-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

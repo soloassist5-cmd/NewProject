@@ -15,3 +15,30 @@ npm-debug.log*
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+
+# Приложения: собранные файлы и всё, чем их подписывают.
+#
+# Ключ подписи в репозиторий не кладут никогда, а этот вдобавок публичный:
+# по ключу можно выпустить «обновление» приложения от имени гимназии, и
+# телефоны установят его поверх настоящего, ничего не спросив.
+apps/android/*.keystore
+apps/android/*.jks
+apps/android/*.apk
+apps/android/*.aab
+apps/android/*.idsig
+apps/android/app/
+apps/android/.gradle/
+apps/android/gradle/
+apps/android/gradlew
+apps/android/gradlew.bat
+apps/android/build.gradle
+apps/android/gradle.properties
+apps/android/manifest-checksum.txt
+apps/android/store_icon.png
+apps/desktop/dist/
+
+# Иконки настольного приложения нужны для сборки — их правило build/ выше
+# отсекать не должно.
+!apps/desktop/build/
+!apps/desktop/build/icon.png
+!apps/desktop/build/icon.ico

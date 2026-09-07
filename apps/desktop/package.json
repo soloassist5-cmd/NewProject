@@ -1,0 +1,16 @@
+{
+  "name": "gimroom-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ГимРум — мессенджер МБОУ Кировская Гимназия",
+  "main": "main.js",
+  "author": "МБОУ Кировская Гимназия",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --dir"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}
