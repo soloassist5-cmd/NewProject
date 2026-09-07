@@ -582,6 +582,26 @@ describe('ГимРум — проверка API', () => {
       assert.equal(response.status, 400);
     });
 
+    it('показывает, сколько места занято под файлы', async () => {
+      const response = await anya.get('/api/files');
+      assert.equal(response.status, 200);
+      assert.ok(response.data.storage.usedBytes > 0, 'загруженное учтено');
+      assert.ok(response.data.storage.quotaBytes > 0, 'предел объявлен');
+      assert.ok(
+        response.data.storage.freeBytes <= response.data.storage.quotaBytes,
+        'свободного не может быть больше предела',
+      );
+    });
+
+    it('не принимает файл больше предела', async () => {
+      // Девять мегабайт при пределе в восемь.
+      const big = Buffer.alloc(9 * 1024 * 1024, 7);
+      const form = new FormData();
+      form.append('file', new Blob([big], { type: 'image/png' }), 'огромное.png');
+      const response = await anya.request('POST', '/api/files', form);
+      assert.equal(response.status, 413);
+    });
+
     it('отклоняет запрещённый тип файла', async () => {
       const form = new FormData();
       form.append('file', new Blob([Buffer.from('MZ')], { type: 'application/x-msdownload' }), 'virus.exe');
@@ -827,6 +847,102 @@ describe('ГимРум — проверка API', () => {
       assert.equal((await fetch(`${BASE}/api/users/${petya.id}`)).status, 401);
       assert.equal((await anya.get('/api/users/1%20OR%201=1')).status, 400);
       assert.equal((await anya.get('/api/users/99999999')).status, 404);
+    });
+  });
+
+  describe('Меню чата: очистка, блокировка, картинка группы', () => {
+    const sosed = new Client(`sosed_${suffix}`);
+    let chatId;
+
+    it('заводит соседа и переписку с ним', async () => {
+      await register(sosed, 'Слава Соседов', '8Г');
+
+      const created = await anya.post('/api/conversations', { kind: 'dm', userId: sosed.id });
+      assert.equal(created.status, 201);
+      chatId = created.data.conversation.id;
+
+      const sent = await anya.post(`/api/conversations/${chatId}/messages`, { body: 'Привет!' });
+      assert.equal(sent.status, 201);
+    });
+
+    it('очищает переписку только у того, кто нажал', async () => {
+      const cleared = await anya.post(`/api/conversations/${chatId}/clear`);
+      assert.equal(cleared.status, 200);
+
+      const mine = await anya.get(`/api/conversations/${chatId}/messages`);
+      assert.equal(mine.data.messages.length, 0, 'у себя пусто');
+
+      const theirs = await sosed.get(`/api/conversations/${chatId}/messages`);
+      assert.ok(theirs.data.messages.length > 0, 'у собеседника переписка на месте');
+    });
+
+    it('очищенный диалог уходит из списка чатов', async () => {
+      const list = await anya.get('/api/conversations');
+      assert.ok(!list.data.conversations.some((item) => item.id === chatId));
+    });
+
+    it('блокировка закрывает дорогу сообщениям', async () => {
+      const blocked = await anya.post(`/api/users/${sosed.id}`);
+      assert.equal(blocked.status, 200);
+
+      const attempt = await sosed.post(`/api/conversations/${chatId}/messages`, {
+        body: 'Всё равно напишу',
+      });
+      assert.equal(attempt.status, 403);
+
+      const own = await anya.post(`/api/conversations/${chatId}/messages`, { body: 'И я не могу' });
+      assert.equal(own.status, 403, 'заблокировавший тоже не пишет, пока не снимет блокировку');
+    });
+
+    it('заблокированный не появляется в поиске', async () => {
+      const found = await anya.get(`/api/users?search=${sosed.name}`);
+      assert.ok(!found.data.people.some((person) => person.id === sosed.id));
+    });
+
+    it('снятая блокировка возвращает всё как было', async () => {
+      const unblocked = await anya.post(`/api/users/${sosed.id}?action=unblock`);
+      assert.equal(unblocked.status, 200);
+
+      const again = await sosed.post(`/api/conversations/${chatId}/messages`, { body: 'Так лучше' });
+      assert.equal(again.status, 201);
+    });
+
+    it('себя заблокировать нельзя', async () => {
+      assert.equal((await anya.post(`/api/users/${anya.id}`)).status, 400);
+    });
+
+    it('картинку группы ставит только создатель', async () => {
+      const group = await anya.post('/api/conversations', {
+        kind: 'group',
+        title: 'Фотокружок',
+        memberIds: [sosed.id],
+      });
+      assert.equal(group.status, 201);
+      const groupId = group.data.conversation.id;
+
+      const png = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYGJAQ0AABvOAQEUOgn0AAAAAElFTkSuQmCC',
+        'base64',
+      );
+      const form = new FormData();
+      form.append('file', new Blob([png], { type: 'image/png' }), 'значок.png');
+      const uploaded = await anya.request('POST', '/api/files', form);
+
+      const byMember = await sosed.patch(`/api/conversations/${groupId}`, {
+        avatarFileId: uploaded.data.file.id,
+      });
+      assert.equal(byMember.status, 403, 'участник картинку не меняет');
+
+      const byOwner = await anya.patch(`/api/conversations/${groupId}`, {
+        avatarFileId: uploaded.data.file.id,
+      });
+      assert.equal(byOwner.status, 200);
+      assert.equal(byOwner.data.conversation.avatarFileId, uploaded.data.file.id);
+    });
+
+    it('у личного диалога картинки не бывает', async () => {
+      const response = await anya.patch(`/api/conversations/${chatId}`, { avatarFileId: null });
+      assert.equal(response.status, 400);
     });
   });
 

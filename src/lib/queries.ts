@@ -139,7 +139,13 @@ export async function listPeople(viewerId: number, search: string): Promise<Publ
     const rows = await sql<UserRow>`
       SELECT id, username, display_name, grade, role, avatar_color, avatar_file_id, bio, last_seen_at
       FROM users
-      WHERE id <> ${viewerId} AND blocked_at IS NULL
+      WHERE id <> ${viewerId}
+        AND blocked_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM blocks b
+          WHERE (b.blocker_id = ${viewerId} AND b.blocked_id = users.id)
+             OR (b.blocker_id = users.id AND b.blocked_id = ${viewerId})
+        )
       ORDER BY last_seen_at DESC
       LIMIT 50
     `;
@@ -151,6 +157,11 @@ export async function listPeople(viewerId: number, search: string): Promise<Publ
     FROM users
     WHERE id <> ${viewerId}
       AND blocked_at IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM blocks b
+        WHERE (b.blocker_id = ${viewerId} AND b.blocked_id = users.id)
+           OR (b.blocker_id = users.id AND b.blocked_id = ${viewerId})
+      )
       AND (lower(display_name) LIKE ${`%${trimmed}%`} OR username LIKE ${`%${trimmed}%`})
     ORDER BY
       (username = ${trimmed}) DESC,
@@ -168,6 +179,48 @@ export async function getUser(userId: number): Promise<PublicUser | null> {
     FROM users WHERE id = ${userId}
   `;
   return row ? toPublicUser(row) : null;
+}
+
+/**
+ * Чёрный список.
+ *
+ * Блокировка односторонняя и молчаливая: заблокированный не получает об этом
+ * сообщения, он просто больше не может писать. Так и задумано — уведомление
+ * «вас заблокировали» в школьном чате само по себе повод для ссоры.
+ */
+export async function blockUser(blockerId: number, blockedId: number): Promise<void> {
+  if (blockerId === blockedId) throw new HttpError(400, 'Себя заблокировать нельзя.');
+
+  const target = await sqlOne<{ role: string }>`SELECT role FROM users WHERE id = ${blockedId}`;
+  if (!target) throw new HttpError(404, 'Пользователь не найден.');
+
+  await sql`
+    INSERT INTO blocks (blocker_id, blocked_id)
+    VALUES (${blockerId}, ${blockedId})
+    ON CONFLICT DO NOTHING
+  `;
+}
+
+export async function unblockUser(blockerId: number, blockedId: number): Promise<void> {
+  await sql`
+    DELETE FROM blocks WHERE blocker_id = ${blockerId} AND blocked_id = ${blockedId}
+  `;
+}
+
+/** Заблокирован ли один другим — в любую сторону. */
+export async function blockedBetween(
+  userId: number,
+  otherId: number,
+): Promise<{ iBlocked: boolean; blockedMe: boolean }> {
+  const rows = await sql<{ blocker_id: string }>`
+    SELECT blocker_id FROM blocks
+    WHERE (blocker_id = ${userId} AND blocked_id = ${otherId})
+       OR (blocker_id = ${otherId} AND blocked_id = ${userId})
+  `;
+  return {
+    iBlocked: rows.some((row) => Number(row.blocker_id) === userId),
+    blockedMe: rows.some((row) => Number(row.blocker_id) === otherId),
+  };
 }
 
 /**
@@ -237,6 +290,7 @@ interface ConversationRow {
   kind: 'dm' | 'group';
   title: string | null;
   avatar_color: string;
+  avatar_file_id: number | null;
   muted: boolean;
   last_read_message_id: number;
   member_count: number;
@@ -262,12 +316,13 @@ interface ConversationRow {
 
 const CONVERSATION_SELECT = `
   SELECT
-    c.id, c.kind, c.title, c.avatar_color,
+    c.id, c.kind, c.title, c.avatar_color, c.avatar_file_id,
     cm.muted, cm.last_read_message_id,
     (SELECT count(*) FROM conversation_members x WHERE x.conversation_id = c.id) AS member_count,
     (SELECT count(*) FROM messages um
       WHERE um.conversation_id = c.id
         AND um.id > cm.last_read_message_id
+        AND um.id > cm.cleared_before_message_id
         AND um.sender_id IS DISTINCT FROM cm.user_id
         AND um.deleted_at IS NULL) AS unread,
     lm.id AS last_message_id,
@@ -290,8 +345,14 @@ const CONVERSATION_SELECT = `
   FROM conversation_members cm
   JOIN conversations c ON c.id = cm.conversation_id
   LEFT JOIN LATERAL (
+    -- Очищенное «у себя» в списке не показывается: после очистки диалог
+    -- выглядит так, будто в нём ничего и не было. Убранные сообщения тоже:
+    -- строчка «сообщение удалено» в списке чатов — след, которого не должно
+    -- остаться, поэтому берётся последнее уцелевшее.
     SELECT m.* FROM messages m
     WHERE m.conversation_id = c.id
+      AND m.id > cm.cleared_before_message_id
+      AND m.deleted_at IS NULL
     ORDER BY m.id DESC LIMIT 1
   ) lm ON true
   LEFT JOIN users ls ON ls.id = lm.sender_id
@@ -326,7 +387,7 @@ function toConversationSummary(row: ConversationRow): ConversationSummary {
     // У личного диалога заголовок — имя собеседника; у группы — её название.
     title: row.kind === 'dm' ? (partner?.displayName ?? 'Диалог') : (row.title ?? 'Группа'),
     avatarColor: row.kind === 'dm' ? (partner?.avatarColor ?? 'violet') : row.avatar_color,
-    avatarFileId: row.kind === 'dm' ? (partner?.avatarFileId ?? null) : null,
+    avatarFileId: row.kind === 'dm' ? (partner?.avatarFileId ?? null) : row.avatar_file_id,
     memberCount: row.member_count,
     muted: row.muted,
     unread: row.unread,
@@ -681,29 +742,59 @@ export async function listMessages(
   options: { before?: number; after?: number; limit?: number } = {},
 ): Promise<Message[]> {
   const limit = Math.min(options.limit ?? config.limits.messagePage, 100);
+  // Всё, что было до очистки, для этого человека больше не существует.
+  const from = await clearedBefore(viewerId, conversationId);
 
   let rows: MessageRow[];
   if (options.after) {
     const result = await pool().query(
-      `${MESSAGE_SELECT} WHERE m.conversation_id = $1 AND m.id > $2 ORDER BY m.id ASC LIMIT $3`,
-      [conversationId, options.after, limit],
+      `${MESSAGE_SELECT} WHERE m.conversation_id = $1 AND m.id > $2 AND m.id > $4 ORDER BY m.id ASC LIMIT $3`,
+      [conversationId, options.after, limit, from],
     );
     rows = result.rows as MessageRow[];
   } else if (options.before) {
     const result = await pool().query(
-      `${MESSAGE_SELECT} WHERE m.conversation_id = $1 AND m.id < $2 ORDER BY m.id DESC LIMIT $3`,
-      [conversationId, options.before, limit],
+      `${MESSAGE_SELECT} WHERE m.conversation_id = $1 AND m.id < $2 AND m.id > $4 ORDER BY m.id DESC LIMIT $3`,
+      [conversationId, options.before, limit, from],
     );
     rows = (result.rows as MessageRow[]).reverse();
   } else {
     const result = await pool().query(
-      `${MESSAGE_SELECT} WHERE m.conversation_id = $1 ORDER BY m.id DESC LIMIT $2`,
-      [conversationId, limit],
+      `${MESSAGE_SELECT} WHERE m.conversation_id = $1 AND m.id > $3 ORDER BY m.id DESC LIMIT $2`,
+      [conversationId, limit, from],
     );
     rows = (result.rows as MessageRow[]).reverse();
   }
 
   return decorate(rows, viewerId);
+}
+
+/** Граница очистки: сообщения до неё этот человек у себя больше не видит. */
+async function clearedBefore(userId: number, conversationId: number): Promise<number> {
+  const row = await sqlOne<{ cleared_before_message_id: string }>`
+    SELECT cleared_before_message_id FROM conversation_members
+    WHERE conversation_id = ${conversationId} AND user_id = ${userId}
+  `;
+  return Number(row?.cleared_before_message_id ?? 0);
+}
+
+/**
+ * Очистка переписки «у себя».
+ *
+ * Чужие слова не удаляются: собеседник вправе видеть свой разговор целиком.
+ * Здесь только ставится граница — для того, кто нажал кнопку, история
+ * начинается заново. Личный диалог после этого исчезает из списка чатов, пока
+ * в нём снова не напишут.
+ */
+export async function clearConversation(userId: number, conversationId: number): Promise<void> {
+  await sql`
+    UPDATE conversation_members
+    SET cleared_before_message_id = COALESCE(
+      (SELECT max(id) FROM messages WHERE conversation_id = ${conversationId}),
+      cleared_before_message_id
+    )
+    WHERE conversation_id = ${conversationId} AND user_id = ${userId}
+  `;
 }
 
 export async function getMessage(viewerId: number, messageId: number): Promise<Message | null> {
@@ -723,7 +814,9 @@ export async function searchMessages(viewerId: number, query: string): Promise<M
        AND m.kind = 'text'
        AND EXISTS (
          SELECT 1 FROM conversation_members cm
-         WHERE cm.conversation_id = m.conversation_id AND cm.user_id = $1
+         WHERE cm.conversation_id = m.conversation_id
+           AND cm.user_id = $1
+           AND m.id > cm.cleared_before_message_id
        )
        AND (
          to_tsvector('russian', m.body) @@ websearch_to_tsquery('russian', $2)

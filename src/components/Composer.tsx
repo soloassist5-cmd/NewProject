@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { CloseIcon, FileIcon, PaperclipIcon, SendIcon } from './Icons';
+import ImageEditor from './ImageEditor';
 import { api, ApiError } from '@/lib/client';
 import { formatFileSize } from '@/lib/format';
 import type { Attachment, ChatMessage, Conversation, Me } from '@/lib/types';
@@ -25,6 +26,14 @@ interface PendingFile {
 /** Сигнал «печатаю» шлём не чаще одного раза в этот интервал. */
 const TYPING_INTERVAL_MS = 3500;
 
+/**
+ * Пределы на вложения. Настоящие — на сервере (config.limits, config.storage),
+ * здесь их копия: она нужна, чтобы не отправлять двадцать мегабайт по школьному
+ * вайфаю ради ответа «слишком большой файл». Расходиться им нельзя.
+ */
+const MAX_FILES = 6;
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+
 export default function Composer({
   conversation,
   me,
@@ -39,6 +48,8 @@ export default function Composer({
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Картинка, открытая в редакторе перед отправкой.
+  const [editingImage, setEditingImage] = useState<File | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -84,19 +95,49 @@ export default function Composer({
     void api.post(`/api/conversations/${conversation.id}/typing`).catch(() => {});
   }
 
-  async function uploadFiles(list: FileList | File[]) {
+  /**
+   * Выбранные файлы. Одиночную картинку сначала показываем в редакторе: почти
+   * всегда с фотографии нужно что-то убрать — фамилию в списке, лишний край
+   * доски. Несколько сразу правкой не мучаем, это уже альбом.
+   */
+  function pickFiles(list: FileList | File[]) {
     const incoming = Array.from(list);
+    const single = incoming.length === 1 ? incoming[0] : null;
+
+    if (single && single.type.startsWith('image/') && single.type !== 'image/svg+xml') {
+      setEditingImage(single);
+      return;
+    }
+
+    void uploadFiles(incoming);
+  }
+
+  async function uploadFiles(list: FileList | File[]) {
+    let incoming = Array.from(list);
     if (incoming.length === 0) return;
 
+    // Лишние отсекаем сразу, а не на середине загрузки: иначе часть файлов уже
+    // уехала бы на сервер и заняла место, а сообщение об отказе пришло бы после.
+    const room = MAX_FILES - files.length;
+    if (incoming.length > room) {
+      incoming = incoming.slice(0, Math.max(0, room));
+      setError(`К одному сообщению можно приложить не больше ${MAX_FILES} файлов.`);
+      if (incoming.length === 0) return;
+    }
+
+    const tooBig = incoming.find((file) => file.size > MAX_FILE_BYTES);
+    if (tooBig) {
+      incoming = incoming.filter((file) => file.size <= MAX_FILE_BYTES);
+      setError(
+        `«${tooBig.name}» больше ${Math.round(MAX_FILE_BYTES / (1024 * 1024))} МБ. ` +
+          'Место в базе общее на всю гимназию, поэтому большие файлы приходится отправлять ссылкой.',
+      );
+      if (incoming.length === 0) return;
+    }
+
     setUploading(true);
-    setError(null);
 
     for (const file of incoming) {
-      if (files.length + incoming.length > 6) {
-        setError('К одному сообщению можно приложить не больше шести файлов.');
-        break;
-      }
-
       const form = new FormData();
       form.append('file', file);
 
@@ -230,7 +271,7 @@ export default function Composer({
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
-        if (event.dataTransfer.files.length > 0) void uploadFiles(event.dataTransfer.files);
+        if (event.dataTransfer.files.length > 0) pickFiles(event.dataTransfer.files);
       }}
     >
       <div className="typing-line" />
@@ -313,7 +354,7 @@ export default function Composer({
             const pasted = Array.from(event.clipboardData.files);
             if (pasted.length > 0) {
               event.preventDefault();
-              void uploadFiles(pasted);
+              pickFiles(pasted);
             }
           }}
           aria-label="Текст сообщения"
@@ -325,7 +366,7 @@ export default function Composer({
           multiple
           hidden
           onChange={(event) => {
-            if (event.target.files) void uploadFiles(event.target.files);
+            if (event.target.files) pickFiles(event.target.files);
             event.target.value = '';
           }}
         />
@@ -350,6 +391,17 @@ export default function Composer({
           <SendIcon />
         </button>
       </div>
+
+      {editingImage ? (
+        <ImageEditor
+          file={editingImage}
+          onCancel={() => setEditingImage(null)}
+          onDone={(edited) => {
+            setEditingImage(null);
+            void uploadFiles([edited]);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

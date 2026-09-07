@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar';
 import { CloseIcon, LogoutIcon } from './Icons';
 import { api, ApiError } from '@/lib/client';
-import { formatListTime, roleLabel } from '@/lib/format';
+import { formatFileSize, formatListTime, roleLabel } from '@/lib/format';
 import { currentSurface, type Surface } from '@/lib/native';
 import type { GradesConfig } from './Messenger';
 import type { Attachment, Me } from '@/lib/types';
@@ -287,6 +287,8 @@ export default function ProfileDialog({ me, grades, onClose, onUpdated }: Profil
             </div>
           </details>
 
+          <StorageMeter />
+
           <DeviceList />
 
           <button className="btn btn-danger" onClick={() => void logout()}>
@@ -309,6 +311,54 @@ export default function ProfileDialog({ me, grades, onClose, onUpdated }: Profil
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Сколько места занимают отправленные файлы.
+ *
+ * Картинки и документы лежат в той же базе, что и переписка, и места там
+ * немного — одно на всю гимназию. Пока полоски нет, отказ «место кончилось»
+ * приходит неожиданно; с ней видно заранее, к чему идёт дело.
+ */
+function StorageMeter() {
+  const [usage, setUsage] = useState<{
+    usedBytes: number;
+    quotaBytes: number;
+    freeBytes: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await api.get<{ storage: typeof usage }>('/api/files');
+        if (!cancelled) setUsage(data.storage);
+      } catch {
+        // Не показать полоску не страшно — это справка, а не настройка.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!usage) return null;
+
+  const share = Math.min(100, Math.round((usage.usedBytes / usage.quotaBytes) * 100));
+
+  return (
+    <div className="field">
+      <span className="field-label">Файлы</span>
+      <div className="storage-bar" role="img" aria-label={`Занято ${share} процентов`}>
+        <div className="storage-bar-fill" style={{ width: `${Math.max(share, 1)}%` }} />
+      </div>
+      <span className="field-hint">
+        {formatFileSize(usage.usedBytes)} из {formatFileSize(usage.quotaBytes)}. Картинки и
+        документы хранятся в той же базе, что и переписка, поэтому места немного — и оно общее на
+        всю гимназию.
+      </span>
     </div>
   );
 }

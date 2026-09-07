@@ -356,9 +356,7 @@ function ConversationRow({
 
   let preview: React.ReactNode = <em>Сообщений пока нет</em>;
   if (last) {
-    if (last.deleted) {
-      preview = <em>Сообщение удалено</em>;
-    } else if (last.kind === 'system') {
+    if (last.kind === 'system') {
       preview = <em>{last.body}</em>;
     } else {
       const author =

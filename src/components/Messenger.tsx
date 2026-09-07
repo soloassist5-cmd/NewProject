@@ -439,15 +439,11 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
           setMessages((prev) => {
             const list = prev[conversationId];
             if (!list) return prev;
-            return {
-              ...prev,
-              [conversationId]: list.map((item) =>
-                item.id === messageId
-                  ? { ...item, deleted: true, body: '', attachments: [], reactions: [] }
-                  : item,
-              ),
-            };
+            // Убранное сообщение исчезает у всех, не оставляя следа в ленте.
+            return { ...prev, [conversationId]: list.filter((item) => item.id !== messageId) };
           });
+          // Список чатов мог держать его как последнее — перечитаем превью.
+          void refreshConversations();
           return;
         }
 

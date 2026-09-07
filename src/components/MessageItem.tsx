@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar';
 import { CheckDoubleIcon, CheckIcon, EditIcon, FileIcon, ReplyIcon, SmileIcon, TrashIcon } from './Icons';
+import ImageViewer from './ImageViewer';
 import { api } from '@/lib/client';
 import { formatFileSize, formatTime, linkify } from '@/lib/format';
 import type { Attachment, ChatMessage, Conversation, Me } from '@/lib/types';
@@ -65,6 +66,11 @@ export default function MessageItem({
     return <div className="system-message">{message.body}</div>;
   }
 
+  // Убранное сообщение просто исчезает. Надпись «сообщение удалено» ничего не
+  // объясняет, зато оставляет в переписке след, вокруг которого потом и идёт
+  // разговор: «а что там было?».
+  if (message.deleted) return null;
+
   const isMine = message.senderId === me.id;
   const showAvatar = conversation.kind === 'group' && !isMine;
 
@@ -84,16 +90,10 @@ export default function MessageItem({
   }
 
   async function remove() {
-    if (!window.confirm('Удалить это сообщение?')) return;
+    if (!window.confirm('Убрать это сообщение?')) return;
     try {
       await api.delete(`/api/messages/${message.id}`);
-      onMessagesChange((list) =>
-        list.map((item) =>
-          item.id === message.id
-            ? { ...item, deleted: true, body: '', attachments: [], reactions: [] }
-            : item,
-        ),
-      );
+      onMessagesChange((list) => list.filter((item) => item.id !== message.id));
     } catch {
       // Тот же результат придёт событием, если удаление всё же прошло.
     }
@@ -150,34 +150,37 @@ export default function MessageItem({
           </div>
         ) : null}
 
-        {message.replyTo ? (
+        {/* Цитата показывается, только пока цитируемое на месте: строка
+            «здесь было сообщение» — это и есть разговор об удалении. */}
+        {message.replyTo && !message.replyTo.deleted ? (
           <div className="bubble-reply">
             <span className="bubble-reply-name">{message.replyTo.senderName ?? 'Неизвестный'}</span>
-            <span className="bubble-reply-text">
-              {message.replyTo.deleted ? 'Сообщение удалено' : message.replyTo.body || 'Вложение'}
-            </span>
+            <span className="bubble-reply-text">{message.replyTo.body || 'Вложение'}</span>
           </div>
         ) : null}
 
-        {message.deleted ? (
-          <div className="bubble-deleted">Сообщение удалено</div>
-        ) : (
-          <>
-            {message.attachments.length > 0 ? (
-              <div className="attachments">
-                {message.attachments.map((attachment) => (
-                  <AttachmentView key={attachment.id} attachment={attachment} />
-                ))}
-              </div>
-            ) : null}
+        {message.attachments.length > 0 ? (
+          <div className="attachments">
+            {message.attachments.map((attachment) => (
+              <AttachmentView key={attachment.id} attachment={attachment} />
+            ))}
+          </div>
+        ) : null}
 
-            {message.body ? <div className="bubble-text">{linkify(message.body)}</div> : null}
-          </>
-        )}
+        {message.body ? <div className="bubble-text">{linkify(message.body)}</div> : null}
 
         <span className="bubble-meta">
-          {message.editedAt ? <span title="Отредактировано">изм.</span> : null}
-          {formatTime(message.createdAt)}
+          {/* У изменённого сообщения на виду время правки: важно, когда именно
+              текст стал таким, а не когда его набрали в первый раз. */}
+          {message.editedAt ? (
+            <span
+              title={`Отправлено в ${formatTime(message.createdAt)}, изменено в ${formatTime(message.editedAt)}`}
+            >
+              изм. {formatTime(message.editedAt)}
+            </span>
+          ) : (
+            formatTime(message.createdAt)
+          )}
           {isMine && !message.pending ? (
             isRead ? (
               <CheckDoubleIcon />
@@ -256,6 +259,7 @@ export default function MessageItem({
 
 function AttachmentView({ attachment }: { attachment: Attachment }) {
   const href = `/api/files/${attachment.id}`;
+  const [viewing, setViewing] = useState(false);
 
   if (attachment.mime.startsWith('image/') && attachment.mime !== 'image/svg+xml') {
     // Место под картинку резервируем заранее — иначе лента прыгает при загрузке.
@@ -263,15 +267,24 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
       attachment.width && attachment.height ? attachment.width / attachment.height : undefined;
 
     return (
-      <a className="attachment-image" href={href} target="_blank" rel="noopener noreferrer">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={href}
-          alt={attachment.name}
-          loading="lazy"
-          style={ratio ? { aspectRatio: String(ratio) } : undefined}
-        />
-      </a>
+      <>
+        <button
+          className="attachment-image"
+          onClick={() => setViewing(true)}
+          aria-label={`Открыть картинку: ${attachment.name}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={href}
+            alt={attachment.name}
+            loading="lazy"
+            style={ratio ? { aspectRatio: String(ratio) } : undefined}
+          />
+        </button>
+        {viewing ? (
+          <ImageViewer src={href} name={attachment.name} onClose={() => setViewing(false)} />
+        ) : null}
+      </>
     );
   }
 

@@ -171,3 +171,71 @@ export const KeyIcon = (props: IconProps) => (
     <path d="m11.2 11.2 8 8M17 17l2-2M14.5 14.5l2-2" />
   </svg>
 );
+
+export const MoreIcon = (props: IconProps) => (
+  <svg {...svgProps(props)}>
+    <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const BellIcon = (props: IconProps) => (
+  <svg {...svgProps(props)}>
+    <path d="M18 8a6 6 0 1 0-12 0v5l-2 4h16l-2-4z" />
+    <path d="M10.5 20a2 2 0 0 0 3 0" />
+  </svg>
+);
+
+export const BanIcon = (props: IconProps) => (
+  <svg {...svgProps(props)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m5.6 5.6 12.8 12.8" />
+  </svg>
+);
+
+export const EraserIcon = (props: IconProps) => (
+  <svg {...svgProps(props)}>
+    <path d="M8.5 20H20" />
+    <path d="M15.5 4.5 4.6 15.4a2 2 0 0 0 0 2.8l1.8 1.8h5l8.6-8.6a2 2 0 0 0 0-2.8l-2.7-2.7a2 2 0 0 0-2.8 0Z" />
+  </svg>
+);
+
+export const ListCheckIcon = (props: IconProps) => (
+  <svg {...svgProps(props)}>
+    <path d="m3 6 2 2 3-3" />
+    <path d="m3 14 2 2 3-3" />
+    <path d="M12 7h9" />
+    <path d="M12 15h9" />
+  </svg>
+);
+
+export const UserIcon = (props: IconProps) => (
+  <svg {...svgProps(props)}>
+    <circle cx="12" cy="8" r="3.6" />
+    <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+  </svg>
+);
+
+export const CameraIcon = (props: IconProps) => (
+  <svg {...svgProps(props)}>
+    <path d="M4 8h3l1.5-2h7L17 8h3v11H4z" />
+    <circle cx="12" cy="13" r="3.4" />
+  </svg>
+);
+
+export const ZoomInIcon = (props: IconProps) => (
+  <svg {...svgProps(props)}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M11 8v6M8 11h6" />
+    <path d="m20 20-3.5-3.5" />
+  </svg>
+);
+
+export const DownloadIcon = (props: IconProps) => (
+  <svg {...svgProps(props)}>
+    <path d="M12 4v11" />
+    <path d="m7.5 11 4.5 4.5 4.5-4.5" />
+    <path d="M5 19h14" />
+  </svg>
+);

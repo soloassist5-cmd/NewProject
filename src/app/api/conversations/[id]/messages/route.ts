@@ -1,6 +1,7 @@
-import { json, readJson, requireMembership, withUser } from '@/lib/http';
+import { sqlOne } from '@/lib/db';
+import { HttpError, json, readJson, requireMembership, withUser } from '@/lib/http';
 import { createMessage } from '@/lib/messaging';
-import { listMessages } from '@/lib/queries';
+import { blockedBetween, listMessages } from '@/lib/queries';
 import { parseId, parseIdList, parseMessageBody } from '@/lib/validate';
 
 export const runtime = 'nodejs';
@@ -32,7 +33,24 @@ export const GET = withUser<Context>(async (user, request, { params }) => {
 /** Отправка сообщения. */
 export const POST = withUser<Context>(async (user, request, { params }) => {
   const conversationId = parseId((await params).id, 'идентификатор диалога');
-  await requireMembership(user.id, conversationId);
+  const membership = await requireMembership(user.id, conversationId);
+
+  // Личный диалог и чёрный список. В группе блокировка не действует: там
+  // разговор общий, и убрать оттуда человека — дело создателя, а не соседа.
+  if (membership.kind === 'dm') {
+    const partner = await sqlOne<{ user_id: string }>`
+      SELECT user_id FROM conversation_members
+      WHERE conversation_id = ${conversationId} AND user_id <> ${user.id}
+      LIMIT 1
+    `;
+    if (partner) {
+      const { iBlocked, blockedMe } = await blockedBetween(user.id, Number(partner.user_id));
+      if (blockedMe) throw new HttpError(403, 'Сообщение не доставлено.');
+      if (iBlocked) {
+        throw new HttpError(403, 'Вы заблокировали этого человека. Снимите блокировку в его профиле.');
+      }
+    }
+  }
 
   const body = await readJson(request);
   const text = parseMessageBody(body.body ?? '');

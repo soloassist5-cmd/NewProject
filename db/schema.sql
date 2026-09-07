@@ -189,3 +189,38 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   hits        INTEGER     NOT NULL DEFAULT 0,
   window_start TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Очистка переписки «у себя».
+--
+-- Удалять чужие сообщения по нажатию одной кнопки нельзя: это чужие слова, и
+-- собеседник вправе видеть свой разговор. Поэтому очистка ставит границу — всё,
+-- что было до неё, для этого человека больше не показывается. У собеседника
+-- переписка остаётся целой.
+ALTER TABLE conversation_members
+  ADD COLUMN IF NOT EXISTS cleared_before_message_id BIGINT NOT NULL DEFAULT 0;
+
+-- Чёрный список.
+--
+-- Заблокированный не может писать в личку тому, кто его заблокировал, и не
+-- видит его в поиске. Список личный: блокировка в одну сторону.
+CREATE TABLE IF NOT EXISTS blocks (
+  blocker_id BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  blocked_id BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (blocker_id, blocked_id)
+);
+
+CREATE INDEX IF NOT EXISTS blocks_blocked_idx ON blocks (blocked_id);
+
+-- Место, занятое файлами, считается по владельцу и по дате: и то и другое
+-- нужно на каждой загрузке, поэтому индекс, а не перебор всей таблицы.
+CREATE INDEX IF NOT EXISTS files_owner_idx ON files (owner_id, created_at DESC);
+
+-- Картинка группы. Личным диалогам не нужна: там аватар собеседника.
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS avatar_file_id BIGINT;
+
+DO $$ BEGIN
+  ALTER TABLE conversations
+    ADD CONSTRAINT conversations_avatar_file_fk
+    FOREIGN KEY (avatar_file_id) REFERENCES files(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
