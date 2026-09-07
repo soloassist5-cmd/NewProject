@@ -20,8 +20,8 @@
     "path": "./android.keystore",
     "alias": "gimroom"
   },
-  "appVersionName": "1.3.0",
-  "appVersionCode": 4,
+  "appVersionName": "1.4.0",
+  "appVersionCode": 5,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://gimroom.vercel.app/manifest.webmanifest",
@@ -40,5 +40,5 @@
   "additionalTrustedOrigins": [],
   "retainedBundles": [],
   "displayOverride": [],
-  "appVersion": "1.3.0"
+  "appVersion": "1.4.0"
 }
