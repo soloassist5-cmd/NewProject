@@ -32,6 +32,7 @@ export default function GroupInfoDialog({
   const [error, setError] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   const myMembership = members.find((member) => member.id === me.id);
   const canManage = myMembership?.role === 'owner' || me.role === 'admin';
@@ -87,6 +88,33 @@ export default function GroupInfoDialog({
     return () => clearTimeout(timer);
   }, [adding, search, members]);
 
+  /**
+   * Ставит или убирает картинку группы.
+   *
+   * Картинка сначала загружается как обычный файл и только потом привязывается
+   * к группе: так она проходит те же проверки, что и вложения, — тип, размер и
+   * место в общем хранилище.
+   */
+  async function changePhoto(file: File | null) {
+    setPhotoBusy(true);
+    setError(null);
+    try {
+      let fileId: number | null = null;
+      if (file) {
+        const form = new FormData();
+        form.append('file', file);
+        const uploaded = await api.post<{ file: { id: number } }>('/api/files', form);
+        fileId = uploaded.file.id;
+      }
+      await api.patch(`/api/conversations/${conversation.id}`, { avatarFileId: fileId });
+      onChanged();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'Не удалось поставить картинку.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
   async function act(action: () => Promise<unknown>) {
     setError(null);
     try {
@@ -107,7 +135,12 @@ export default function GroupInfoDialog({
         aria-label="О группе"
       >
         <div className="modal-header">
-          <Avatar name={conversation.title} color={conversation.avatarColor} size={38} />
+          <Avatar
+            name={conversation.title}
+            color={conversation.avatarColor}
+            fileId={conversation.avatarFileId}
+            size={38}
+          />
           <h2 className="modal-title">{conversation.title}</h2>
           <button className="btn-ghost" onClick={onClose} aria-label="Закрыть">
             <CloseIcon />
@@ -116,6 +149,50 @@ export default function GroupInfoDialog({
 
         <div className="modal-body">
           {error ? <div className="error-banner">{error}</div> : null}
+
+          {/* Картинку группы меняют здесь: карточка группы — то место, куда за
+              этим идут. В меню чата тот же пункт есть, но искать его там,
+              открыв «Участники и код», уже не станут. */}
+          {canManage ? (
+            <div className="field">
+              <span className="field-label">Картинка группы</span>
+              <div className="group-photo-row">
+                <Avatar
+                  name={conversation.title}
+                  color={conversation.avatarColor}
+                  fileId={conversation.avatarFileId}
+                  size={56}
+                />
+                <div className="group-photo-actions">
+                  <label className="btn btn-quiet btn-small">
+                    {photoBusy ? <span className="spinner" /> : null}
+                    {conversation.avatarFileId ? 'Заменить' : 'Выбрать'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      disabled={photoBusy}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = '';
+                        if (file) void changePhoto(file);
+                      }}
+                    />
+                  </label>
+                  {conversation.avatarFileId ? (
+                    <button
+                      className="btn btn-danger btn-small"
+                      disabled={photoBusy}
+                      onClick={() => void changePhoto(null)}
+                    >
+                      Убрать
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <span className="field-hint">Её видят все участники. Меняет только создатель.</span>
+            </div>
+          ) : null}
 
           {canManage ? (
             <label className="field">

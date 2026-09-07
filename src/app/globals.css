@@ -2033,6 +2033,23 @@ a {
   border-color: var(--accent);
 }
 
+/* Картинка группы в её карточке. */
+.group-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.group-photo-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Кнопка «Выбрать» — это label со скрытым полем выбора файла. */
+.group-photo-actions label.btn {
+  cursor: pointer;
+}
+
 /* Полоска занятого места под файлы. */
 .storage-bar {
   height: 6px;
