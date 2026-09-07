@@ -8,6 +8,8 @@ interface AuthScreenProps {
   schoolName: string;
   parallels: readonly number[];
   letters: readonly string[];
+  /** Приложение развёрнуто, но не настроено — форму показывать бессмысленно. */
+  setupProblem?: string | null;
 }
 
 /** Вход и регистрация. После успеха перезагружаем страницу — сессия уже в куке. */
@@ -16,6 +18,7 @@ export default function AuthScreen({
   schoolName,
   parallels,
   letters,
+  setupProblem = null,
 }: AuthScreenProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -72,6 +75,16 @@ export default function AuthScreen({
           </p>
         </div>
 
+        {setupProblem ? (
+          <div className="setup-notice">
+            <strong>Приложение ещё не настроено</strong>
+            <p>{setupProblem}</p>
+            <p className="setup-notice-hint">
+              Переменные подхватывает только новая сборка: если вы их уже добавили, сделайте
+              Redeploy.
+            </p>
+          </div>
+        ) : (
         <form className="auth-form" onSubmit={submit}>
           {error ? <div className="error-banner">{error}</div> : null}
 
@@ -170,19 +183,22 @@ export default function AuthScreen({
             {isRegister ? 'Создать аккаунт' : 'Войти'}
           </button>
         </form>
+        )}
 
-        <p className="auth-switch">
-          {isRegister ? 'Уже есть аккаунт? ' : 'Ещё нет аккаунта? '}
-          <button
-            type="button"
-            onClick={() => {
-              setMode(isRegister ? 'login' : 'register');
-              setError(null);
-            }}
-          >
-            {isRegister ? 'Войти' : 'Зарегистрироваться'}
-          </button>
-        </p>
+        {setupProblem ? null : (
+          <p className="auth-switch">
+            {isRegister ? 'Уже есть аккаунт? ' : 'Ещё нет аккаунта? '}
+            <button
+              type="button"
+              onClick={() => {
+                setMode(isRegister ? 'login' : 'register');
+                setError(null);
+              }}
+            >
+              {isRegister ? 'Войти' : 'Зарегистрироваться'}
+            </button>
+          </p>
+        )}
       </div>
     </main>
   );

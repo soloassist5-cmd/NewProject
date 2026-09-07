@@ -1365,6 +1365,34 @@ a {
   border-top: 1px solid var(--border);
 }
 
+/* Сообщение о ненастроенном приложении вместо формы входа. */
+.setup-notice {
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 7%, var(--bg-panel));
+  text-align: left;
+}
+
+.setup-notice strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--danger);
+  font-size: 15px;
+}
+
+.setup-notice p {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.setup-notice-hint {
+  color: var(--text-faint) !important;
+  font-size: 12.5px !important;
+}
+
 /* Карточка человека — узкая, содержимое по центру. */
 .modal-narrow {
   width: min(380px, 100%);
