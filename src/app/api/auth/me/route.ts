@@ -1,4 +1,4 @@
-import { currentUser } from '@/lib/auth';
+import { currentUser, renewSession } from '@/lib/auth';
 import { config } from '@/lib/config';
 import { handle, json } from '@/lib/http';
 
@@ -8,6 +8,11 @@ export const dynamic = 'force-dynamic';
 export const GET = handle(async () => {
   const user = await currentUser();
   if (!user) return json({ user: null, inviteOnly: config.inviteOnly });
+
+  // Приложение спрашивает «кто я» при каждом запуске — удобная точка, чтобы
+  // отодвинуть срок запомненного входа. Иначе через месяц после регистрации
+  // форма входа встретила бы всех разом, включая тех, кто заходит ежедневно.
+  await renewSession();
 
   return json({
     user: {

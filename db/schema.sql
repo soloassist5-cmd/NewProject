@@ -35,6 +35,15 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_agent  TEXT        NOT NULL DEFAULT ''
 );
 
+-- Когда сессией пользовались в последний раз. По ней сессия продлевается,
+-- пока человек заходит, и по ней же он видит в профиле свои устройства.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+-- Запоминать ли вход. false — «чужой компьютер»: кука живёт до закрытия
+-- браузера, сессия короткая и не продлевается. Так следующий, кто сядет за
+-- этот компьютер, не окажется в чужой переписке.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS persistent BOOLEAN NOT NULL DEFAULT true;
+
 CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
 CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions (expires_at);
 

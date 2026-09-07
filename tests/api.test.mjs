@@ -1035,6 +1035,116 @@ describe('ГимРум — проверка API', () => {
     });
   });
 
+  describe('Сессии и устройства', () => {
+    // Свой аккаунт: соседние наборы меняют пароли и логины, и вход отсюда не
+    // должен от этого зависеть.
+    const ust = new Client(`ustroystva_${suffix}`);
+    const PAROL = 'ochen-nadyozhnyy-parol';
+
+    it('заводит аккаунт для проверок', async () => {
+      await register(ust, 'Устройства Проверкины', '7Г');
+    });
+
+    it('запомненный вход переживает перезапуск приложения', async () => {
+      const fresh = new Client(ust.name);
+      const login = await fresh.post('/api/auth/login', { username: ust.name, password: PAROL });
+      assert.equal(login.status, 200, `вход не прошёл: ${JSON.stringify(login.data)}`);
+
+      // Кука со сроком жизни: браузер сохранит её на диск и вернёт после
+      // перезапуска. Кука сеанса такого атрибута не имеет.
+      assert.match(fresh.rawSetCookie, /Max-Age=\d+/i, 'вход должен запоминаться');
+      const maxAge = Number(fresh.rawSetCookie.match(/Max-Age=(\d+)/i)[1]);
+      assert.ok(maxAge > 60 * 60 * 24 * 20, `срок куки ${maxAge} секунд — слишком короткий`);
+
+      // Тот же токен, новый «запуск» — логин не спрашивают.
+      const restarted = new Client(ust.name);
+      restarted.cookie = fresh.cookie;
+      const me = await restarted.get('/api/auth/me');
+      assert.equal(me.status, 200);
+      assert.equal(me.data.user.username, ust.name);
+    });
+
+    it('«чужой компьютер» не оставляет запомненного входа', async () => {
+      const obshchiy = new Client(ust.name);
+      await obshchiy.post('/api/auth/login', {
+        username: ust.name,
+        password: PAROL,
+        sharedComputer: true,
+      });
+
+      assert.doesNotMatch(
+        obshchiy.rawSetCookie,
+        /Max-Age|Expires/i,
+        'на общем компьютере кука должна умереть вместе с браузером',
+      );
+      // В самом окне мессенджер работает как обычно.
+      assert.equal((await obshchiy.get('/api/conversations')).status, 200);
+    });
+
+    it('показывает устройства и не выдаёт токены', async () => {
+      const response = await ust.get('/api/sessions');
+      assert.equal(response.status, 200);
+      assert.ok(response.data.sessions.length >= 1);
+
+      const current = response.data.sessions.find((item) => item.current);
+      assert.ok(current, 'текущее устройство помечено');
+      assert.ok(current.device, 'у устройства есть понятное название');
+
+      const dump = JSON.stringify(response.data);
+      assert.ok(!dump.includes(ust.cookie.split('=')[1]), 'токен сессии наружу не отдаётся');
+      assert.doesNotMatch(dump, /token_hash/);
+    });
+
+    it('выход на других устройствах закрывает чужие вкладки, но не свою', async () => {
+      // Два входа в один аккаунт: как будто дома и на школьном компьютере.
+      const shkola = new Client(ust.name);
+      await shkola.post('/api/auth/login', { username: ust.name, password: PAROL });
+      assert.equal((await shkola.get('/api/conversations')).status, 200);
+
+      const doma = new Client(ust.name);
+      await doma.post('/api/auth/login', { username: ust.name, password: PAROL });
+
+      const closed = await doma.del('/api/sessions');
+      assert.equal(closed.status, 200);
+      assert.ok(closed.data.closed >= 1, 'что-то должно было закрыться');
+
+      assert.equal(
+        (await shkola.get('/api/conversations')).status,
+        401,
+        'забытый вход на школьном компьютере закрыт',
+      );
+      assert.equal(
+        (await doma.get('/api/conversations')).status,
+        200,
+        'та вкладка, из которой нажали, продолжает работать',
+      );
+    });
+
+    it('чужой список устройств не посмотреть и не закрыть', async () => {
+      // Своё — своим: у каждого свой список, общего доступа нет.
+      const mine = await ust.get('/api/sessions');
+      const dump = JSON.stringify(mine.data);
+      assert.ok(!dump.includes('null'), 'в списке только свои сессии');
+
+      const guest = await fetch(`${BASE}/api/sessions`);
+      assert.equal(guest.status, 401);
+
+      const guestDelete = await fetch(`${BASE}/api/sessions`, { method: 'DELETE' });
+      assert.equal(guestDelete.status, 401);
+    });
+
+    it('выход закрывает только эту сессию', async () => {
+      const first = new Client(ust.name);
+      await first.post('/api/auth/login', { username: ust.name, password: PAROL });
+      const second = new Client(ust.name);
+      await second.post('/api/auth/login', { username: ust.name, password: PAROL });
+
+      await first.post('/api/auth/logout');
+      assert.equal((await first.get('/api/conversations')).status, 401, 'вышли здесь');
+      assert.equal((await second.get('/api/conversations')).status, 200, 'другое устройство осталось');
+    });
+  });
+
   describe('Безопасность', () => {
     it('нельзя выдать себе роль администратора при регистрации', async () => {
       const impostor = new Client(`samozvanets_${suffix}`);

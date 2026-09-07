@@ -70,7 +70,11 @@ export const POST = handle(async (request) => {
   `;
   if (!created) throw new HttpError(500, 'Не удалось создать аккаунт.');
 
-  await createSession(created.id, request.headers.get('user-agent') ?? '');
+  await createSession(
+    created.id,
+    request.headers.get('user-agent') ?? '',
+    body.sharedComputer !== true,
+  );
 
   return json({
     user: { id: created.id, username, displayName, grade, role },

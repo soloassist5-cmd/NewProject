@@ -94,14 +94,29 @@ function tokenFingerprint(token: string): string {
   return createHmac('sha256', authSecret()).update(token).digest('hex');
 }
 
-/** Создаёт сессию и ставит куку. Возвращает сырой токен (он больше нигде не хранится). */
-export async function createSession(userId: number, userAgent: string): Promise<string> {
+/**
+ * Создаёт сессию и ставит куку. Возвращает сырой токен (он больше нигде не хранится).
+ *
+ * `persistent` — «запомнить вход». По умолчанию да: человек заходит со своего
+ * телефона и не должен вводить пароль каждый день. Если выбран чужой
+ * компьютер, кука ставится без срока жизни — браузер удалит её при закрытии, —
+ * и сама сессия живёт всего несколько часов.
+ */
+export async function createSession(
+  userId: number,
+  userAgent: string,
+  persistent = true,
+): Promise<string> {
   const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + config.session.maxAgeSeconds * 1000);
+  const maxAge = persistent ? config.session.maxAgeSeconds : config.session.sharedMaxAgeSeconds;
+  const expiresAt = new Date(Date.now() + maxAge * 1000);
 
   await sql`
-    INSERT INTO sessions (token_hash, user_id, expires_at, user_agent)
-    VALUES (${tokenFingerprint(token)}, ${userId}, ${expiresAt.toISOString()}, ${userAgent.slice(0, 300)})
+    INSERT INTO sessions (token_hash, user_id, expires_at, user_agent, persistent)
+    VALUES (
+      ${tokenFingerprint(token)}, ${userId}, ${expiresAt.toISOString()},
+      ${userAgent.slice(0, 300)}, ${persistent}
+    )
   `;
 
   const store = await cookies();
@@ -110,10 +125,53 @@ export async function createSession(userId: number, userAgent: string): Promise<
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: config.session.maxAgeSeconds,
+    // Без maxAge получается кука сеанса: браузер выбросит её, как только его
+    // закроют. Ровно это и нужно на общем компьютере.
+    ...(persistent ? { maxAge } : {}),
   });
 
   return token;
+}
+
+/**
+ * Продлевает запомненный вход, если пора.
+ *
+ * Без этого сессия истекала бы ровно через месяц после входа, даже у того, кто
+ * заходит каждый день, — и целый класс разом встретил бы форму входа. Здесь
+ * срок отодвигается, пока человек пользуется мессенджером.
+ *
+ * Вызывается из обработчиков маршрутов: только там можно переставить куку.
+ * Сессии «чужого компьютера» не продлеваются никогда — в этом их смысл.
+ */
+export async function renewSession(): Promise<void> {
+  const store = await cookies();
+  const token = store.get(config.session.cookieName)?.value;
+  if (!token) return;
+
+  const fingerprint = tokenFingerprint(token);
+
+  const row = await sqlOne<{ persistent: boolean; stale: boolean }>`
+    SELECT persistent,
+           last_used_at < now() - ${`${config.session.renewAfterSeconds} seconds`}::interval AS stale
+    FROM sessions
+    WHERE token_hash = ${fingerprint} AND expires_at > now()
+  `;
+  if (!row || !row.persistent || !row.stale) return;
+
+  const expiresAt = new Date(Date.now() + config.session.maxAgeSeconds * 1000);
+  await sql`
+    UPDATE sessions
+    SET expires_at = ${expiresAt.toISOString()}, last_used_at = now()
+    WHERE token_hash = ${fingerprint}
+  `;
+
+  store.set(config.session.cookieName, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: config.session.maxAgeSeconds,
+  });
 }
 
 /**
@@ -148,6 +206,109 @@ export async function destroySession(): Promise<void> {
     await sql`DELETE FROM sessions WHERE token_hash = ${tokenFingerprint(token)}`;
   }
   store.delete(config.session.cookieName);
+}
+
+export interface DeviceSession {
+  id: string;
+  device: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  persistent: boolean;
+  /** Та самая, из которой пришёл запрос. Её нельзя закрыть «за компанию». */
+  current: boolean;
+}
+
+/**
+ * Понятное название устройства из строки User-Agent.
+ *
+ * Показывать её целиком бессмысленно: это две строки технических подробностей,
+ * по которым школьник всё равно не поймёт, его это телефон или чужой.
+ */
+function deviceName(userAgent: string): string {
+  const ua = userAgent.toLowerCase();
+
+  const system = ua.includes('android')
+    ? 'Android'
+    : /iphone|ipad|ipod/.test(ua)
+      ? 'iPhone или iPad'
+      : ua.includes('windows')
+        ? 'Windows'
+        : ua.includes('mac os')
+          ? 'Mac'
+          : ua.includes('linux')
+            ? 'Linux'
+            : 'Неизвестное устройство';
+
+  // Порядок важен: Edge и Opera представляются ещё и Chrome, Chrome — Safari.
+  const browser = ua.includes('edg/')
+    ? 'Edge'
+    : /opr\/|opera/.test(ua)
+      ? 'Opera'
+      : ua.includes('yabrowser')
+        ? 'Яндекс.Браузер'
+        : ua.includes('firefox')
+          ? 'Firefox'
+          : ua.includes('chrome')
+            ? 'Chrome'
+            : ua.includes('safari')
+              ? 'Safari'
+              : '';
+
+  return browser ? `${system}, ${browser}` : system;
+}
+
+/** Устройства, на которых открыт аккаунт. */
+export async function listSessions(userId: number): Promise<DeviceSession[]> {
+  const store = await cookies();
+  const token = store.get(config.session.cookieName)?.value;
+  const currentFingerprint = token ? tokenFingerprint(token) : '';
+
+  const rows = await sql<{
+    token_hash: string;
+    user_agent: string;
+    created_at: Date;
+    last_used_at: Date;
+    expires_at: Date;
+    persistent: boolean;
+  }>`
+    SELECT token_hash, user_agent, created_at, last_used_at, expires_at, persistent
+    FROM sessions
+    WHERE user_id = ${userId} AND expires_at > now()
+    ORDER BY last_used_at DESC
+    LIMIT 50
+  `;
+
+  return rows.map((row) => ({
+    // Наружу уходит не сам отпечаток, а его начало: этого хватает, чтобы
+    // отличить строки друг от друга, и мало, чтобы что-то подобрать.
+    id: row.token_hash.slice(0, 16),
+    device: deviceName(row.user_agent),
+    createdAt: row.created_at.toISOString(),
+    lastUsedAt: row.last_used_at.toISOString(),
+    expiresAt: row.expires_at.toISOString(),
+    persistent: row.persistent,
+    current: row.token_hash === currentFingerprint,
+  }));
+}
+
+/**
+ * Закрывает все сессии, кроме текущей.
+ *
+ * Это кнопка «я забыл выйти на школьном компьютере»: чужая открытая вкладка
+ * перестаёт работать сразу, а тот, кто нажал, остаётся в аккаунте.
+ */
+export async function destroyOtherSessions(userId: number): Promise<number> {
+  const store = await cookies();
+  const token = store.get(config.session.cookieName)?.value;
+  const keep = token ? tokenFingerprint(token) : '';
+
+  const removed = await sql<{ token_hash: string }>`
+    DELETE FROM sessions
+    WHERE user_id = ${userId} AND token_hash <> ${keep}
+    RETURNING token_hash
+  `;
+  return removed.length;
 }
 
 /** Отмечает, что человек сейчас в сети. Вызывается из SSE-потока. */

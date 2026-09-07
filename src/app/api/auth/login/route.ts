@@ -58,7 +58,11 @@ export const POST = handle(async (request) => {
     );
   }
 
-  await createSession(user.id, request.headers.get('user-agent') ?? '');
+  // «Чужой компьютер»: вход не переживёт закрытия браузера. Признак приходит
+  // от клиента и ничего не открывает — только сокращает срок жизни сессии,
+  // поэтому подделать его можно разве что себе во вред.
+  const persistent = body.sharedComputer !== true;
+  await createSession(user.id, request.headers.get('user-agent') ?? '', persistent);
   // Заодно подчищаем протухшие сессии — редкая и дешёвая операция.
   void pruneExpiredSessions().catch(() => {});
 

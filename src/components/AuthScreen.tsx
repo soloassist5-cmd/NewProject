@@ -26,6 +26,9 @@ export default function AuthScreen({
   const [parallel, setParallel] = useState<string>('');
   const [letter, setLetter] = useState<string>(letters[0] ?? '');
   const [inviteCode, setInviteCode] = useState('');
+  // По умолчанию вход запоминается: со своего телефона пароль каждый раз
+  // вводить незачем. Галочку ставят на общем компьютере.
+  const [sharedComputer, setSharedComputer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -45,9 +48,10 @@ export default function AuthScreen({
           password,
           grade: `${parallel}${letter}`,
           inviteCode,
+          sharedComputer,
         });
       } else {
-        await api.post('/api/auth/login', { username, password });
+        await api.post('/api/auth/login', { username, password, sharedComputer });
       }
       // Полная перезагрузка: серверный компонент сам подхватит новую сессию.
       window.location.reload();
@@ -177,6 +181,22 @@ export default function AuthScreen({
               <span className="field-hint">Регистрация закрыта — код выдаёт администратор.</span>
             </label>
           ) : null}
+
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={sharedComputer}
+              onChange={(event) => setSharedComputer(event.target.checked)}
+            />
+            <span>
+              Чужой компьютер
+              <span className="field-hint">
+                {sharedComputer
+                  ? 'Выход произойдёт сам, когда браузер закроют.'
+                  : 'Отметьте в компьютерном классе — иначе следующий за этим компьютером попадёт в вашу переписку.'}
+              </span>
+            </span>
+          </label>
 
           <button className="btn" type="submit" disabled={busy}>
             {busy ? <span className="spinner" /> : null}

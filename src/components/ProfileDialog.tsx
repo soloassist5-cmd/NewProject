@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar';
 import { CloseIcon, LogoutIcon } from './Icons';
 import { api, ApiError } from '@/lib/client';
-import { roleLabel } from '@/lib/format';
+import { formatListTime, roleLabel } from '@/lib/format';
 import type { GradesConfig } from './Messenger';
 import type { Attachment, Me } from '@/lib/types';
 
@@ -301,6 +301,8 @@ export default function ProfileDialog({ me, grades, onClose, onUpdated }: Profil
             </div>
           </details>
 
+          <DeviceList />
+
           <button className="btn btn-danger" onClick={() => void logout()}>
             <LogoutIcon /> Выйти из аккаунта
           </button>
@@ -322,5 +324,101 @@ export default function ProfileDialog({ me, grades, onClose, onUpdated }: Profil
         </div>
       </div>
     </div>
+  );
+}
+
+interface DeviceSession {
+  id: string;
+  device: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  persistent: boolean;
+  current: boolean;
+}
+
+/**
+ * Где ещё открыт мой аккаунт.
+ *
+ * Смысл раздела — не статистика, а одна кнопка: «я забыл выйти на школьном
+ * компьютере». Пока такого списка нет, человек об этом даже не узнает.
+ */
+function DeviceList() {
+  const [sessions, setSessions] = useState<DeviceSession[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<{ sessions: DeviceSession[] }>('/api/sessions')
+      .then((data) => setSessions(data.sessions))
+      .catch(() => setSessions([]));
+  }, []);
+
+  async function closeOthers() {
+    setBusy(true);
+    try {
+      const data = await api.delete<{ closed: number; sessions: DeviceSession[] }>('/api/sessions');
+      setSessions(data.sessions);
+      setNotice(
+        data.closed === 0
+          ? 'Других устройств и не было.'
+          : `Закрыто устройств: ${data.closed}. Там придётся войти заново.`,
+      );
+    } catch {
+      setNotice('Не удалось закрыть другие устройства.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!sessions) return null;
+
+  const others = sessions.filter((item) => !item.current).length;
+
+  return (
+    <details>
+      <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14 }}>
+        Устройства{others > 0 ? ` (ещё ${others})` : ''}
+      </summary>
+
+      <div style={{ marginTop: 12 }}>
+        {notice ? <div className="notice-banner">{notice}</div> : null}
+
+        <div className="device-list">
+          {sessions.map((item) => (
+            <div key={item.id} className="device-row">
+              <div>
+                <div className="device-name">
+                  {item.device}
+                  {item.current ? <span className="admin-tag">это устройство</span> : null}
+                  {!item.persistent ? <span className="admin-tag">до закрытия браузера</span> : null}
+                </div>
+                <div className="device-meta">
+                  Вход: {formatListTime(item.createdAt)} · последняя активность:{' '}
+                  {formatListTime(item.lastUsedAt)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {others > 0 ? (
+          <button
+            className="btn btn-quiet btn-small"
+            style={{ marginTop: 10 }}
+            onClick={() => void closeOthers()}
+            disabled={busy}
+          >
+            {busy ? <span className="spinner" /> : null}
+            Выйти на других устройствах
+          </button>
+        ) : (
+          <p className="field-hint" style={{ marginTop: 10 }}>
+            Аккаунт открыт только здесь.
+          </p>
+        )}
+      </div>
+    </details>
   );
 }
