@@ -13,11 +13,11 @@
  * стили, герб.
  */
 
-const CACHE = 'gimroom-shell-v1';
+const CACHE = 'gimroom-shell-v2';
 const OFFLINE_PAGE = '/offline.html';
 
 // Файлы, без которых офлайн-экран не покажется.
-const PRECACHE = [OFFLINE_PAGE, '/mark.svg', '/emblem.png', '/manifest.webmanifest'];
+const PRECACHE = [OFFLINE_PAGE, '/emblem.png', '/emblem-small.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

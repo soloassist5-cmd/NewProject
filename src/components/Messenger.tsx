@@ -325,7 +325,7 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
         // Тег схлопывает подряд идущие уведомления из одного чата в одно.
         tag: `gimroom-${message.conversationId}`,
         icon: '/emblem.png',
-        badge: '/mark.svg',
+        badge: '/emblem.png',
         data: { conversationId: message.conversationId },
       };
 

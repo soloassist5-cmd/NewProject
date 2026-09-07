@@ -9,16 +9,16 @@
   "lang": "ru",
   "icons": [
     {
-      "src": "/mark.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/emblem.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     },
     {
       "src": "/emblem.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "maskable"
     }
   ]
 }

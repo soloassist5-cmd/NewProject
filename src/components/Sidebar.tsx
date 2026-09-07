@@ -97,7 +97,7 @@ export default function Sidebar({
       <div className="sidebar-header">
         <div className="brand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="brand-mark" src="/mark.svg" alt="" width={30} height={30} />
+          <img className="brand-mark" src="/emblem-small.png" alt="" width={30} height={30} />
           <span className="brand-text">
             <span className="brand-name">ГимРум</span>
             <span className="brand-school">{schoolName}</span>
