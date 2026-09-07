@@ -42,3 +42,6 @@ apps/desktop/dist/
 !apps/desktop/build/
 !apps/desktop/build/icon.png
 !apps/desktop/build/icon.ico
+apps/launcher/*.exe
+apps/launcher/*.res
+apps/launcher/icon.ico
