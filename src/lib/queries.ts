@@ -10,6 +10,8 @@ export interface PublicUser {
   displayName: string;
   /** Класс вида «9О». У сотрудников гимназии пусто. */
   grade: string;
+  /** Аккаунт учителя: класса нет, вместо него рядом с именем стоит должность. */
+  isTeacher: boolean;
   avatarColor: string;
   avatarFileId: number | null;
   bio: string;
@@ -97,6 +99,8 @@ interface UserRow {
   username: string;
   display_name: string;
   grade: string;
+  /** Роль в гимназии: member | teacher | admin. Не путать с ролью в группе. */
+  role: string;
   avatar_color: string;
   avatar_file_id: number | null;
   bio: string;
@@ -109,6 +113,7 @@ function toPublicUser(row: UserRow): PublicUser {
     username: row.username,
     displayName: row.display_name,
     grade: row.grade ?? '',
+    isTeacher: row.role === 'teacher',
     avatarColor: row.avatar_color,
     avatarFileId: row.avatar_file_id,
     bio: row.bio,
@@ -122,7 +127,7 @@ export async function listPeople(viewerId: number, search: string): Promise<Publ
   const pattern = `%${search.trim().toLowerCase()}%`;
   const rows = search.trim()
     ? await sql<UserRow>`
-        SELECT id, username, display_name, grade, avatar_color, avatar_file_id, bio, last_seen_at
+        SELECT id, username, display_name, grade, role, avatar_color, avatar_file_id, bio, last_seen_at
         FROM users
         WHERE id <> ${viewerId}
           AND (lower(display_name) LIKE ${pattern} OR username LIKE ${pattern})
@@ -130,7 +135,7 @@ export async function listPeople(viewerId: number, search: string): Promise<Publ
         LIMIT 50
       `
     : await sql<UserRow>`
-        SELECT id, username, display_name, grade, avatar_color, avatar_file_id, bio, last_seen_at
+        SELECT id, username, display_name, grade, role, avatar_color, avatar_file_id, bio, last_seen_at
         FROM users
         WHERE id <> ${viewerId}
         ORDER BY last_seen_at DESC
@@ -141,7 +146,7 @@ export async function listPeople(viewerId: number, search: string): Promise<Publ
 
 export async function getUser(userId: number): Promise<PublicUser | null> {
   const row = await sqlOne<UserRow>`
-    SELECT id, username, display_name, grade, avatar_color, avatar_file_id, bio, last_seen_at
+    SELECT id, username, display_name, grade, role, avatar_color, avatar_file_id, bio, last_seen_at
     FROM users WHERE id = ${userId}
   `;
   return row ? toPublicUser(row) : null;
@@ -170,6 +175,7 @@ interface ConversationRow {
   partner_username: string | null;
   partner_display_name: string | null;
   partner_grade: string | null;
+  partner_role: string | null;
   partner_avatar_color: string | null;
   partner_avatar_file_id: number | null;
   partner_bio: string | null;
@@ -198,6 +204,7 @@ const CONVERSATION_SELECT = `
     p.username AS partner_username,
     p.display_name AS partner_display_name,
     p.grade AS partner_grade,
+    p.role AS partner_role,
     p.avatar_color AS partner_avatar_color,
     p.avatar_file_id AS partner_avatar_file_id,
     p.bio AS partner_bio,
@@ -226,6 +233,7 @@ function toConversationSummary(row: ConversationRow): ConversationSummary {
           username: row.partner_username ?? '',
           displayName: row.partner_display_name ?? '',
           grade: row.partner_grade ?? '',
+          isTeacher: row.partner_role === 'teacher',
           avatarColor: row.partner_avatar_color ?? 'violet',
           avatarFileId: row.partner_avatar_file_id,
           bio: row.partner_bio ?? '',
@@ -283,14 +291,18 @@ export async function getConversationSummary(
 }
 
 export async function listMembers(conversationId: number): Promise<(PublicUser & { role: string })[]> {
-  const rows = await sql<UserRow & { role: string }>`
-    SELECT u.id, u.username, u.display_name, u.grade, u.avatar_color, u.avatar_file_id, u.bio, u.last_seen_at, cm.role
+  // Ролей две, и они про разное: u.role — кто человек в гимназии, cm.role —
+  // кто он в этой группе. Наружу как `role` уходит вторая.
+  const rows = await sql<UserRow & { member_role: string }>`
+    SELECT u.id, u.username, u.display_name, u.grade, u.role,
+           u.avatar_color, u.avatar_file_id, u.bio, u.last_seen_at,
+           cm.role AS member_role
     FROM conversation_members cm
     JOIN users u ON u.id = cm.user_id
     WHERE cm.conversation_id = ${conversationId}
     ORDER BY cm.role = 'owner' DESC, lower(u.display_name)
   `;
-  return rows.map((row) => ({ ...toPublicUser(row), role: row.role }));
+  return rows.map((row) => ({ ...toPublicUser(row), role: row.member_role }));
 }
 
 /** Находит личный диалог с человеком или создаёт его. */

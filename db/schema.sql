@@ -1,4 +1,4 @@
--- Перемена — схема базы данных.
+-- ГимРум — схема базы данных.
 -- Скрипт идемпотентный: его можно прогонять поверх существующей базы (npm run db:push).
 
 CREATE TABLE IF NOT EXISTS users (
@@ -10,13 +10,17 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_color   TEXT        NOT NULL DEFAULT 'violet',
   avatar_file_id BIGINT,                               -- FK добавляется ниже, после files
   bio            TEXT        NOT NULL DEFAULT '',
-  role           TEXT        NOT NULL DEFAULT 'member', -- member | admin
+  role           TEXT        NOT NULL DEFAULT 'member', -- member | teacher | admin
+  blocked_at     TIMESTAMPTZ,                           -- заполнено — вход закрыт
+  blocked_reason TEXT        NOT NULL DEFAULT '',
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_seen_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Колонка появилась позже таблицы: дописываем её в уже существующих базах.
+-- Колонки появились позже таблицы: дописываем их в уже существующих базах.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS grade TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_reason TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS users_last_seen_idx ON users (last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS users_display_name_idx ON users (lower(display_name));

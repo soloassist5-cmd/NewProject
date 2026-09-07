@@ -36,7 +36,7 @@ function authSecret(): string {
     );
   }
   // В разработке разрешаем работать без секрета, но предупреждаем.
-  return 'peremena-dev-secret-not-for-production';
+  return 'gimroom-dev-secret-not-for-production';
 }
 
 /** Хеширует пароль. Формат строки: scrypt$N$r$p$соль$хеш (обе части в base64). */
@@ -116,7 +116,13 @@ export async function createSession(userId: number, userAgent: string): Promise<
   return token;
 }
 
-/** Читает текущего пользователя из куки. null — значит гость. */
+/**
+ * Читает текущего пользователя из куки. null — значит гость.
+ *
+ * Заблокированный аккаунт сюда не проходит. Сессии при блокировке и так
+ * удаляются, но проверка стоит и здесь: если блокировка случится в ту же
+ * секунду, что и запрос, открытая вкладка не должна доработать до конца дня.
+ */
 export async function currentUser(): Promise<SessionUser | null> {
   const store = await cookies();
   const token = store.get(config.session.cookieName)?.value;
@@ -128,6 +134,7 @@ export async function currentUser(): Promise<SessionUser | null> {
     JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ${tokenFingerprint(token)}
       AND s.expires_at > now()
+      AND u.blocked_at IS NULL
   `;
 
   return user;

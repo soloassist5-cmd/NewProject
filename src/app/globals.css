@@ -1,37 +1,55 @@
 /* ─── Тема ───────────────────────────────────────────────────────────────
    Светлая палитра объявлена на :root, тёмная переопределяет только цвета —
-   и по системной настройке, и по ручному переключателю. */
+   и по системной настройке, и по ручному переключателю. Два одинаковых блока
+   ниже — плата за то, что «системная тема» и «выбранная вручную» в CSS не
+   объединяются в один селектор. */
 
 :root {
-  --bg: #f4f5f9;
+  /* Фирменная пара взята прямо с герба гимназии: глубокий синий #005888 и
+     голубой #88C0E0. Всё остальное — оттенки вокруг них, поэтому интерфейс
+     читается как школьный, а не как первый попавшийся шаблон. */
+  --bg: #eef3f8;
   --bg-panel: #ffffff;
   --bg-elevated: #ffffff;
-  --bg-hover: #eceef5;
-  --bg-active: #e4e7f2;
-  --bg-input: #f0f2f7;
+  --bg-hover: #e5eef6;
+  --bg-active: #d8e8f4;
+  --bg-input: #f2f6fa;
 
-  --text: #14161d;
-  --text-muted: #6a7181;
-  --text-faint: #949bab;
+  --text: #0e1a24;
+  --text-muted: #566a7b;
+  --text-faint: #8698a8;
 
-  --border: #e2e5ee;
-  --border-strong: #cdd2e0;
+  --border: #dbe6ef;
+  --border-strong: #c1d2e1;
 
-  --accent: #5b5bd6;
-  --accent-hover: #4f4fc4;
-  --accent-soft: #e9e9fb;
+  --accent: #005888;
+  --accent-hover: #004670;
+  --accent-soft: #e0edf7;
   --accent-text: #ffffff;
+  --accent-line: #88c0e0;
 
   --bubble-in: #ffffff;
-  --bubble-out: #5b5bd6;
+  --bubble-out: #005888;
   --bubble-out-text: #ffffff;
 
-  --danger: #d4351c;
-  --online: #2ea043;
+  --danger: #c0392b;
+  --online: #1e9e5a;
 
-  --shadow-sm: 0 1px 2px rgb(16 20 35 / 0.06), 0 1px 3px rgb(16 20 35 / 0.04);
-  --shadow-md: 0 4px 12px rgb(16 20 35 / 0.08), 0 1px 3px rgb(16 20 35 / 0.06);
-  --shadow-lg: 0 12px 32px rgb(16 20 35 / 0.16), 0 2px 8px rgb(16 20 35 / 0.08);
+  /* Тени с синим подтоном — серые смотрятся на голубом фоне грязно. */
+  --shadow-sm: 0 1px 2px rgb(9 40 62 / 0.06);
+  --shadow-md: 0 2px 8px rgb(9 40 62 / 0.08), 0 1px 2px rgb(9 40 62 / 0.05);
+  --shadow-lg: 0 16px 40px rgb(9 40 62 / 0.16), 0 2px 8px rgb(9 40 62 / 0.08);
+
+  /* Цвета участников. Ими красятся и аватарки, и имена в групповых чатах:
+     одинаково синие имена читаются как ссылки и не помогают различать людей. */
+  --c-violet: #3d5a80;
+  --c-blue: #005888;
+  --c-teal: #0f7b7b;
+  --c-green: #2a7f52;
+  --c-amber: #a8701a;
+  --c-orange: #b8552b;
+  --c-rose: #a63d5c;
+  --c-plum: #6b4e8f;
 
   --radius: 10px;
   --radius-lg: 16px;
@@ -42,70 +60,95 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #0e1016;
-    --bg-panel: #161922;
-    --bg-elevated: #1d212c;
-    --bg-hover: #222634;
-    --bg-active: #2a2f40;
-    --bg-input: #1d212c;
+    --bg: #0b1219;
+    --bg-panel: #111b24;
+    --bg-elevated: #17242f;
+    --bg-hover: #1d2c39;
+    --bg-active: #243645;
+    --bg-input: #17242f;
 
-    --text: #e8eaf0;
-    --text-muted: #98a0b3;
-    --text-faint: #6d7488;
+    --text: #e4edf3;
+    --text-muted: #93a6b5;
+    --text-faint: #6b8093;
 
-    --border: #262b38;
-    --border-strong: #363d4e;
+    --border: #1f2e3a;
+    --border-strong: #2e4152;
 
-    --accent: #7c7cf0;
-    --accent-hover: #8d8df5;
-    --accent-soft: #23253a;
-    --accent-text: #ffffff;
+    /* На тёмном фоне фирменный синий тонет, поэтому берём его осветлённый
+       вариант — он же есть на гербе во внешнем кольце. */
+    --accent: #58a6d8;
+    --accent-hover: #74b8e3;
+    --accent-soft: #13293a;
+    --accent-text: #04131e;
+    --accent-line: #2e5f80;
 
-    --bubble-in: #1d212c;
-    --bubble-out: #4f4fc4;
+    --bubble-in: #17242f;
+    --bubble-out: #16537a;
     --bubble-out-text: #ffffff;
 
-    --danger: #f87171;
-    --online: #3fb950;
+    --danger: #ef8577;
+    --online: #3fb97a;
 
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
-    --shadow-md: 0 4px 12px rgb(0 0 0 / 0.4);
-    --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
+    --shadow-md: 0 2px 10px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.55);
+
+    /* На тёмном фоне те же цвета не читаются — берём осветлённые. */
+    --c-violet: #86a6c9;
+    --c-blue: #5aa4d4;
+    --c-teal: #45b3b3;
+    --c-green: #5cba84;
+    --c-amber: #d9a94e;
+    --c-orange: #dd8a63;
+    --c-rose: #d4778f;
+    --c-plum: #a98cc9;
 
     color-scheme: dark;
   }
 }
 
 :root[data-theme='dark'] {
-  --bg: #0e1016;
-  --bg-panel: #161922;
-  --bg-elevated: #1d212c;
-  --bg-hover: #222634;
-  --bg-active: #2a2f40;
-  --bg-input: #1d212c;
+  --bg: #0b1219;
+  --bg-panel: #111b24;
+  --bg-elevated: #17242f;
+  --bg-hover: #1d2c39;
+  --bg-active: #243645;
+  --bg-input: #17242f;
 
-  --text: #e8eaf0;
-  --text-muted: #98a0b3;
-  --text-faint: #6d7488;
+  --text: #e4edf3;
+  --text-muted: #93a6b5;
+  --text-faint: #6b8093;
 
-  --border: #262b38;
-  --border-strong: #363d4e;
+  --border: #1f2e3a;
+  --border-strong: #2e4152;
 
-  --accent: #7c7cf0;
-  --accent-hover: #8d8df5;
-  --accent-soft: #23253a;
-  --accent-text: #ffffff;
+  /* На тёмном фоне фирменный синий тонет, поэтому берём его осветлённый
+     вариант — он же есть на гербе во внешнем кольце. */
+  --accent: #58a6d8;
+  --accent-hover: #74b8e3;
+  --accent-soft: #13293a;
+  --accent-text: #04131e;
+  --accent-line: #2e5f80;
 
-  --bubble-in: #1d212c;
-  --bubble-out: #4f4fc4;
+  --bubble-in: #17242f;
+  --bubble-out: #16537a;
   --bubble-out-text: #ffffff;
 
-  --danger: #f87171;
-  --online: #3fb950;
+  --danger: #ef8577;
+  --online: #3fb97a;
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.4);
-  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 2px 10px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.55);
+
+  --c-violet: #86a6c9;
+  --c-blue: #5aa4d4;
+  --c-teal: #45b3b3;
+  --c-green: #5cba84;
+  --c-amber: #d9a94e;
+  --c-orange: #dd8a63;
+  --c-rose: #d4778f;
+  --c-plum: #a98cc9;
 
   color-scheme: dark;
 }
@@ -331,14 +374,18 @@ a {
   object-fit: cover;
 }
 
-.avatar-violet { --avatar-bg: linear-gradient(135deg, #8b5cf6, #6d28d9); }
-.avatar-blue   { --avatar-bg: linear-gradient(135deg, #3b82f6, #1d4ed8); }
-.avatar-teal   { --avatar-bg: linear-gradient(135deg, #14b8a6, #0f766e); }
-.avatar-green  { --avatar-bg: linear-gradient(135deg, #22c55e, #15803d); }
-.avatar-amber  { --avatar-bg: linear-gradient(135deg, #f59e0b, #b45309); }
-.avatar-orange { --avatar-bg: linear-gradient(135deg, #fb7185, #e11d48); }
-.avatar-rose   { --avatar-bg: linear-gradient(135deg, #f472b6, #be185d); }
-.avatar-plum   { --avatar-bg: linear-gradient(135deg, #c084fc, #7e22ce); }
+/* Плоские приглушённые цвета вместо градиентов: восемь ярких переливов в
+   списке чатов выглядят нарядно на макете и пестро в работе. Гамма подобрана
+   вокруг фирменного синего, поэтому список читается как одна система.
+   Названия оставлены прежними — они уже лежат в базе у заведённых аккаунтов. */
+.avatar-violet { --avatar-bg: var(--c-violet); }
+.avatar-blue   { --avatar-bg: var(--c-blue); }
+.avatar-teal   { --avatar-bg: var(--c-teal); }
+.avatar-green  { --avatar-bg: var(--c-green); }
+.avatar-amber  { --avatar-bg: var(--c-amber); }
+.avatar-orange { --avatar-bg: var(--c-orange); }
+.avatar-rose   { --avatar-bg: var(--c-rose); }
+.avatar-plum   { --avatar-bg: var(--c-plum); }
 
 .avatar-online-dot {
   position: absolute;
@@ -476,16 +523,13 @@ a {
   text-transform: uppercase;
 }
 
+/* Знак гимназии. Это картинка, а не буква в цветном квадрате: школьный
+   мессенджер должен узнаваться по своему гербу. */
 .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #8b5cf6, #5b5bd6);
-  color: #fff;
-  font-size: 15px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
+  border-radius: 50%;
 }
 
 .sidebar-search {
@@ -724,6 +768,47 @@ a {
   margin-top: auto;
 }
 
+/* Начало переписки. Раньше на её месте зияла пустота в пол-экрана; теперь
+   там видно, с кем говоришь и когда всё началось. */
+.chat-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 20px 26px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.chat-intro-name {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.chat-intro-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.chat-intro-note {
+  margin-top: 2px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+/* Экран «чат не выбран». Герб вместо пустого места. */
+.empty-emblem {
+  width: 96px;
+  height: 96px;
+  opacity: 0.9;
+  margin-bottom: 4px;
+}
+
 .day-divider {
   display: flex;
   align-items: center;
@@ -806,12 +891,13 @@ a {
   padding: 7px 12px 6px;
   border-radius: var(--radius-lg);
   background: var(--bubble-in);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
   min-width: 0;
 }
 
 .message-row.is-mine .bubble {
   background: var(--bubble-out);
+  border-color: var(--bubble-out);
   color: var(--bubble-out-text);
 }
 
@@ -827,6 +913,7 @@ a {
   font-size: 13px;
   font-weight: 650;
   margin-bottom: 2px;
+  color: var(--sender, var(--accent));
 }
 
 .bubble-text {
@@ -1278,6 +1365,196 @@ a {
   border-top: 1px solid var(--border);
 }
 
+/* ───────────────────────── Панель администратора ───────────────────────── */
+
+/* Список аккаунтов длиннее обычного диалога — ему нужна ширина. */
+.modal-wide {
+  width: min(680px, 100%);
+}
+
+.tab-row {
+  display: flex;
+  gap: 4px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 11px 4px;
+  margin-right: 14px;
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.notice-banner {
+  padding: 10px 13px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-row {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+
+.admin-row.is-blocked {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 5%, var(--bg-panel));
+}
+
+.admin-row-main {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.admin-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-row-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-row-meta {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.admin-row-reason {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.admin-row-note {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.admin-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.admin-row-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.admin-row-form .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-row-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.admin-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-active);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.admin-tag-blocked {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+}
+
+.btn-small {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+/* Переключатель «учителю / ученику»: два состояния, одно нажатие. */
+.segmented {
+  display: flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+}
+
+.segment {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: calc(var(--radius) - 4px);
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--text-muted);
+}
+
+.segment.is-active {
+  background: var(--bg-panel);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+/* На телефоне кнопки в строке аккаунта не помещаются рядом с именем. */
+@media (max-width: 560px) {
+  .admin-row-main {
+    flex-wrap: wrap;
+  }
+
+  .admin-row-actions {
+    width: 100%;
+  }
+
+  .admin-row-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .admin-row-form {
+    flex-wrap: wrap;
+  }
+
+  .admin-row-form .input {
+    flex-basis: 100%;
+  }
+}
+
 .person-row {
   display: flex;
   align-items: center;
@@ -1365,60 +1642,121 @@ a {
      иначе на телефоне клавиатура закроет кнопку «Войти». */
   overflow-y: auto;
   overscroll-behavior: contain;
-  display: grid;
-  place-items: center;
-  padding: calc(24px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right))
-    calc(24px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
-  background:
-    radial-gradient(1000px 500px at 15% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent),
-    radial-gradient(800px 400px at 100% 110%, color-mix(in srgb, #14b8a6 12%, transparent), transparent),
-    var(--bg);
+  display: flex;
+  justify-content: center;
+  /* safe center, а не обычный: при форме регистрации карточка выше экрана, и
+     обычное центрирование срезает ей верх вместе с гербом — прокруткой его уже
+     не достать. */
+  align-items: safe center;
+  /* Сверху с запасом: герб выступает за край карточки на 76 пикселей. */
+  padding: calc(92px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right))
+    calc(28px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+  /* Ровный фирменный синий вместо разноцветных размывов: они выглядят нарядно
+     на макете и никак не связаны со школой. */
+  background: var(--auth-bg);
+  position: relative;
+}
+
+:root {
+  --auth-bg: #003b5e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --auth-bg: #060d13;
+  }
+}
+
+:root[data-theme='dark'] {
+  --auth-bg: #060d13;
+}
+
+/* Едва различимая сетка в клетку — отсылка к тетради, единственное украшение
+   на всём экране. Держится на фоне, под карточкой её не видно. */
+.auth-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
 }
 
 .auth-card {
-  width: min(400px, 100%);
-  padding: 30px;
-  border-radius: 20px;
+  position: relative;
+  width: min(410px, 100%);
+  padding: 34px 30px 30px;
+  border-radius: 18px;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
 }
 
-.auth-brand {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  margin-bottom: 6px;
+/* Герб над карточкой, наполовину выступая за её край — так он читается как
+   печать на документе, а не как иконка в углу. */
+.auth-emblem {
+  display: block;
+  width: 84px;
+  height: 84px;
+  margin: -76px auto 14px;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  padding: 5px;
+  box-shadow: var(--shadow-md);
 }
 
-.auth-brand .brand-mark {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  font-size: 20px;
+.auth-heading {
+  text-align: center;
+  margin-bottom: 24px;
 }
 
 .auth-title {
   margin: 0;
-  font-size: 21px;
-  font-weight: 680;
-  letter-spacing: -0.02em;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.auth-school {
+  margin: 3px 0 0;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+/* Тонкая голубая черта с герба — держит блок заголовка вместе. */
+.auth-rule {
+  width: 42px;
+  height: 2px;
+  margin: 14px auto 0;
+  border-radius: 1px;
+  background: var(--accent-line);
 }
 
 .auth-subtitle {
-  margin: 0 0 22px;
+  margin: 12px 0 0;
   color: var(--text-muted);
   font-size: 14px;
+  line-height: 1.45;
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 15px;
+}
+
+.auth-form .btn {
+  margin-top: 3px;
+  padding: 12px 16px;
+  font-size: 15px;
 }
 
 .auth-switch {
-  margin-top: 18px;
+  margin: 20px 0 0;
   text-align: center;
   font-size: 14px;
   color: var(--text-muted);
@@ -1426,7 +1764,7 @@ a {
 
 .auth-switch button {
   color: var(--accent);
-  font-weight: 550;
+  font-weight: 600;
 }
 
 .auth-switch button:hover {

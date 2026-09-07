@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Avatar from './Avatar';
-import { BellOffIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon } from './Icons';
+import { BellOffIcon, MoonIcon, PlusIcon, SearchIcon, ShieldIcon, SunIcon } from './Icons';
 import { api } from '@/lib/client';
-import { formatListTime, highlight } from '@/lib/format';
+import { formatListTime, highlight, personSubtitle, roleLabel } from '@/lib/format';
 import type { ChatMessage, Conversation, Me, Person } from '@/lib/types';
 
 interface SidebarProps {
@@ -17,6 +17,7 @@ interface SidebarProps {
   onSelect: (conversationId: number) => void;
   onNewChat: () => void;
   onOpenProfile: () => void;
+  onOpenAdmin: () => void;
 }
 
 export default function Sidebar({
@@ -29,13 +30,17 @@ export default function Sidebar({
   onSelect,
   onNewChat,
   onOpenProfile,
+  onOpenAdmin,
 }: SidebarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ messages: ChatMessage[]; people: Person[] } | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark' | null>(null);
 
+  // Под своим именем — класс, а у сотрудника гимназии должность.
+  const meSubtitle = me.grade || roleLabel(me.role);
+
   useEffect(() => {
-    const saved = localStorage.getItem('peremena-theme');
+    const saved = localStorage.getItem('gimroom-theme');
     if (saved === 'dark' || saved === 'light') setTheme(saved);
   }, []);
 
@@ -46,7 +51,7 @@ export default function Sidebar({
     const next = current === 'dark' ? 'light' : 'dark';
     setTheme(next);
     document.documentElement.dataset.theme = next;
-    localStorage.setItem('peremena-theme', next);
+    localStorage.setItem('gimroom-theme', next);
   }
 
   // Поиск с задержкой, чтобы не дёргать сервер на каждую букву.
@@ -75,12 +80,23 @@ export default function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-header">
         <div className="brand">
-          <span className="brand-mark">П</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="brand-mark" src="/mark.svg" alt="" width={30} height={30} />
           <span className="brand-text">
-            <span className="brand-name">Перемена</span>
+            <span className="brand-name">ГимРум</span>
             <span className="brand-school">{schoolName}</span>
           </span>
         </div>
+        {me.role === 'admin' ? (
+          <button
+            className="btn-ghost"
+            onClick={onOpenAdmin}
+            title="Администрирование"
+            aria-label="Панель администратора"
+          >
+            <ShieldIcon />
+          </button>
+        ) : null}
         <button
           className="btn-ghost"
           onClick={toggleTheme}
@@ -158,7 +174,7 @@ export default function Sidebar({
             <div className="sidebar-me-name">{me.displayName}</div>
             <div className="sidebar-me-status">
               @{me.username}
-              {me.grade ? ` · ${me.grade}` : ''}
+              {meSubtitle ? ` · ${meSubtitle}` : ''}
             </div>
           </div>
         </button>
@@ -266,7 +282,7 @@ function SearchResults({
                 <div className="person-name">{highlight(person.displayName, query)}</div>
                 <div className="person-handle">
                   @{person.username}
-                  {person.grade ? ` · ${person.grade}` : ''}
+                  {personSubtitle(person) ? ` · ${personSubtitle(person)}` : ''}
                 </div>
               </div>
             </button>

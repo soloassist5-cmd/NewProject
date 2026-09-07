@@ -26,8 +26,17 @@ export const POST = handle(async (request) => {
     message: 'Слишком много попыток входа в этот аккаунт. Подождите 15 минут.',
   });
 
-  const user = await sqlOne<{ id: number; username: string; display_name: string; password_hash: string; role: string }>`
-    SELECT id, username, display_name, password_hash, role FROM users WHERE username = ${username}
+  const user = await sqlOne<{
+    id: number;
+    username: string;
+    display_name: string;
+    password_hash: string;
+    role: string;
+    blocked_at: Date | null;
+    blocked_reason: string;
+  }>`
+    SELECT id, username, display_name, password_hash, role, blocked_at, blocked_reason
+    FROM users WHERE username = ${username}
   `;
 
   // Одинаковый ответ и для несуществующего имени, и для неверного пароля —
@@ -36,6 +45,18 @@ export const POST = handle(async (request) => {
   // быстрее и выдавал бы отсутствие аккаунта одним лишь временем.
   const ok = await verifyPassword(password, user?.password_hash ?? (await dummyPasswordHash()));
   if (!user || !ok) throw new HttpError(401, 'Неверное имя пользователя или пароль.');
+
+  // Про блокировку говорим только тому, кто знает пароль: иначе перебором имён
+  // можно было бы выяснить, кого в гимназии заблокировали.
+  if (user.blocked_at) {
+    const reason = user.blocked_reason.trim();
+    throw new HttpError(
+      403,
+      reason
+        ? `Аккаунт заблокирован администратором. Причина: ${reason}`
+        : 'Аккаунт заблокирован администратором. Обратитесь к администратору гимназии.',
+    );
+  }
 
   await createSession(user.id, request.headers.get('user-agent') ?? '');
   // Заодно подчищаем протухшие сессии — редкая и дешёвая операция.

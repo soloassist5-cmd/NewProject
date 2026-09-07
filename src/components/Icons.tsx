@@ -148,3 +148,26 @@ export const LogoutIcon = (props: IconProps) => (
     <path d="M17 8.5 20.5 12 17 15.5M20 12H9.5" />
   </svg>
 );
+
+/** Щит — вход в админ-панель. */
+export const ShieldIcon = (props: IconProps) => (
+  <svg {...svgProps(props)}>
+    <path d="M12 3.5 5 6v5.5c0 4 2.9 7.4 7 8.9 4.1-1.5 7-4.9 7-8.9V6z" />
+  </svg>
+);
+
+/** Замок — заблокированный аккаунт. */
+export const LockIcon = (props: IconProps) => (
+  <svg {...svgProps({ size: 14, ...props })}>
+    <rect x="4.5" y="10.5" width="15" height="9.5" rx="2" />
+    <path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7" />
+  </svg>
+);
+
+/** Ключ — смена пароля. */
+export const KeyIcon = (props: IconProps) => (
+  <svg {...svgProps({ size: 16, ...props })}>
+    <circle cx="8" cy="8" r="4.5" />
+    <path d="m11.2 11.2 8 8M17 17l2-2M14.5 14.5l2-2" />
+  </svg>
+);

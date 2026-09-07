@@ -140,7 +140,12 @@ export default function MessageItem({
         }}
       >
         {showAvatar && isGroupStart ? (
-          <div className="bubble-sender" style={{ color: 'var(--accent)' }}>
+          <div
+            className="bubble-sender"
+            // Цвет берётся от аватарки: в группе так проще держать в голове,
+            // кто есть кто, а одинаково синие имена читаются как ссылки.
+            style={{ ['--sender' as string]: `var(--c-${message.senderColor ?? 'blue'})` }}
+          >
             {message.senderName}
           </div>
         ) : null}

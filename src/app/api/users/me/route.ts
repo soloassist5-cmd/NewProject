@@ -5,7 +5,14 @@ import { publish } from '@/lib/events';
 import { HttpError, json, readJson, withUser } from '@/lib/http';
 import { getUser } from '@/lib/queries';
 import { rateLimit } from '@/lib/ratelimit';
-import { parseBio, parseDisplayName, parseGrade, parseId, parsePassword } from '@/lib/validate';
+import {
+  parseBio,
+  parseDisplayName,
+  parseGrade,
+  parseId,
+  parsePassword,
+  parseStudentGrade,
+} from '@/lib/validate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,7 +39,10 @@ export const PATCH = withUser(async (user, request) => {
   }
 
   if (body.grade !== undefined) {
-    await sql`UPDATE users SET grade = ${parseGrade(body.grade)} WHERE id = ${user.id}`;
+    // Ученик класс меняет, но не стирает: «без класса» — признак аккаунта,
+    // который завёл администратор. Сотрудникам менять тут нечего.
+    const grade = user.role === 'member' ? parseStudentGrade(body.grade) : parseGrade(body.grade);
+    await sql`UPDATE users SET grade = ${grade} WHERE id = ${user.id}`;
   }
 
   if (body.avatarFileId !== undefined) {

@@ -6,8 +6,8 @@ import { clientIp, rateLimit } from '@/lib/ratelimit';
 import {
   avatarColorFor,
   parseDisplayName,
-  parseGrade,
   parsePassword,
+  parseStudentGrade,
   parseUsername,
 } from '@/lib/validate';
 
@@ -24,7 +24,9 @@ export const POST = handle(async (request) => {
   const body = await readJson(request);
   const username = parseUsername(body.username);
   const password = parsePassword(body.password);
-  const grade = parseGrade(body.grade);
+  // Регистрируются ученики, поэтому класс обязателен. Учителям аккаунты
+  // заводит администратор — у тех класса нет.
+  const grade = parseStudentGrade(body.grade);
 
   // Отображаемое имя при регистрации не спрашиваем — на входе только логин,
   // пароль и класс. Пока человек не заполнит имя в профиле, его показывают

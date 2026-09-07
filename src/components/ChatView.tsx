@@ -7,7 +7,7 @@ import GroupInfoDialog from './GroupInfoDialog';
 import { BackIcon, UsersIcon } from './Icons';
 import MessageItem from './MessageItem';
 import { api } from '@/lib/client';
-import { formatDayLabel, formatMemberCount, formatPresence } from '@/lib/format';
+import { formatDayLabel, formatMemberCount, formatPresence, personSubtitle } from '@/lib/format';
 import type { ChatMessage, Conversation, Me, Member, ReadReceipt, TypingUser } from '@/lib/types';
 
 interface ChatViewProps {
@@ -136,6 +136,8 @@ export default function ChatView({
     return (
       <section className="chat">
         <div className="empty-state">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="empty-emblem" src="/emblem.png" alt="" width={96} height={96} />
           <h2>Выберите чат</h2>
           <p>Слева — список переписок. Или начните новую, нажав «плюс» вверху панели.</p>
         </div>
@@ -198,7 +200,37 @@ export default function ChatView({
       <div className="messages" ref={scrollRef} onScroll={handleScroll}>
         <div className="messages-spacer" />
         {loadingOlder ? <div className="messages-top">Загружаем историю…</div> : null}
-        {reachedStart ? <div className="messages-top">Это начало переписки</div> : null}
+
+        {/* Начало переписки: показываем, с кем говорим. Раньше на этом месте
+            была пустота в пол-экрана. Условие про длину — на случай, когда
+            вся история уместилась в одну страницу и догружать нечего. */}
+        {reachedStart || (messages.length > 0 && messages.length < 40) ? (
+          <div className="chat-intro">
+            <Avatar
+              name={conversation.title}
+              color={conversation.avatarColor}
+              fileId={conversation.avatarFileId}
+              size={64}
+            />
+            <div>
+              <div className="chat-intro-name">{conversation.title}</div>
+              <div className="chat-intro-meta">
+                {conversation.kind === 'group'
+                  ? formatMemberCount(conversation.memberCount)
+                  : conversation.partner
+                    ? `@${conversation.partner.username}${
+                        personSubtitle(conversation.partner)
+                          ? ` · ${personSubtitle(conversation.partner)}`
+                          : ''
+                      }`
+                    : ''}
+              </div>
+            </div>
+            <div className="chat-intro-note">
+              {conversation.kind === 'group' ? 'Начало общего чата' : 'Начало переписки'}
+            </div>
+          </div>
+        ) : null}
 
         {messages.map((message, index) => {
           const previous = index > 0 ? messages[index - 1] : null;

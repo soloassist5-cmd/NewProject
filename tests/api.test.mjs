@@ -61,6 +61,9 @@ class Client {
 
 const suffix = Math.random().toString(36).slice(2, 8);
 
+// Директор регистрируется первым: права администратора достаются первому
+// аккаунту в базе. Поэтому набор требует пустой базы — см. README.
+const direktor = new Client(`direktor_${suffix}`);
 const anya = new Client(`anya_${suffix}`);
 const petya = new Client(`petya_${suffix}`);
 const dasha = new Client(`dasha_${suffix}`);
@@ -81,8 +84,12 @@ async function register(client, displayName, grade = '9О') {
   client.grade = response.data.user.grade;
 }
 
-describe('Перемена — проверка API', () => {
+describe('ГимРум — проверка API', () => {
   before(async () => {
+    await register(direktor, 'Директор гимназии', '11О');
+    const role = (await direktor.get('/api/auth/me')).data.user.role;
+    assert.equal(role, 'admin', 'набор рассчитан на пустую базу: первый аккаунт — администратор');
+
     await register(anya, 'Аня Смирнова', '9О');
     await register(petya, 'Петя Иванов', '9Г');
     await register(dasha, 'Даша Орлова', '11Э');
@@ -94,6 +101,7 @@ describe('Перемена — проверка API', () => {
       const response = await fresh.post('/api/auth/register', {
         username: anya.name,
         displayName: 'Самозванец',
+        grade: '9О',
         password: 'ochen-nadyozhnyy-parol',
       });
       assert.equal(response.status, 409);
@@ -127,15 +135,15 @@ describe('Перемена — проверка API', () => {
       assert.equal(response.data.user.grade, '11Э');
     });
 
-    it('разрешает регистрацию без класса — для сотрудников', async () => {
-      const teacher = new Client(`uchitel_${suffix}`);
+    it('не регистрирует без класса — такие аккаунты заводит администратор', async () => {
+      const teacher = new Client(`sotrudnik_${suffix}`);
       const response = await teacher.post('/api/auth/register', {
         username: teacher.name,
         grade: '',
         password: 'ochen-nadyozhnyy-parol',
       });
-      assert.equal(response.status, 201);
-      assert.equal(response.data.user.grade, '');
+      assert.equal(response.status, 400);
+      assert.match(response.data.error, /класс/i);
     });
 
     it('отклоняет несуществующую литеру класса', async () => {
@@ -688,6 +696,238 @@ describe('Перемена — проверка API', () => {
     });
   });
 
+  describe('Класс при регистрации', () => {
+    it('без класса зарегистрироваться нельзя', async () => {
+      const bezklassa = new Client(`bezklassa_${suffix}`);
+      const response = await bezklassa.post('/api/auth/register', {
+        username: bezklassa.name,
+        password: 'ochen-nadyozhnyy-parol',
+        grade: '',
+      });
+      assert.equal(response.status, 400, 'класс обязателен: аккаунты без класса заводит админ');
+    });
+
+    it('ученик не может стереть свой класс через профиль', async () => {
+      await dasha.patch('/api/users/me', { grade: '' });
+      const me = await dasha.get('/api/auth/me');
+      assert.equal(me.data.user.grade, '11Э', 'класс остался прежним');
+    });
+  });
+
+  describe('Админ-панель', () => {
+    const uchitel = new Client(`uchitel_${suffix}`);
+    const naruzhu = new Client(`naruzhu_${suffix}`);
+
+    it('обычный ученик в панель не попадает', async () => {
+      const list = await anya.get('/api/admin/users');
+      assert.equal(list.status, 403, 'список аккаунтов только администратору');
+
+      const created = await anya.post('/api/admin/users', {
+        username: `podstava_${suffix}`,
+        password: 'ochen-nadyozhnyy-parol',
+        role: 'teacher',
+      });
+      assert.equal(created.status, 403);
+
+      const changed = await anya.patch(`/api/admin/users/${petya.id}`, { blocked: true });
+      assert.equal(changed.status, 403);
+    });
+
+    it('гость в панель не попадает', async () => {
+      const response = await fetch(`${BASE}/api/admin/users`);
+      assert.equal(response.status, 401);
+    });
+
+    it('администратор видит список аккаунтов и находит человека по логину', async () => {
+      const all = await direktor.get('/api/admin/users');
+      assert.equal(all.status, 200);
+      assert.ok(all.data.users.length >= 4, 'в списке все зарегистрированные');
+
+      const found = await direktor.get(`/api/admin/users?q=${anya.name}`);
+      assert.equal(found.data.users.length, 1);
+      assert.equal(found.data.users[0].username, anya.name);
+      assert.equal(found.data.users[0].grade, '9О');
+      assert.equal(found.data.users[0].blocked, false);
+    });
+
+    it('в списке нет хешей паролей', async () => {
+      const all = await direktor.get('/api/admin/users');
+      const dump = JSON.stringify(all.data);
+      assert.doesNotMatch(dump, /scrypt\$/, 'хеши наружу не отдаются даже администратору');
+      assert.doesNotMatch(dump, /password_hash|passwordHash/);
+    });
+
+    it('администратор заводит аккаунт учителю, и тот входит', async () => {
+      const response = await direktor.post('/api/admin/users', {
+        username: uchitel.name,
+        displayName: 'Мария Ивановна',
+        password: 'parol-dlya-uchitelya',
+        role: 'teacher',
+      });
+      assert.equal(response.status, 201, JSON.stringify(response.data));
+      assert.equal(response.data.user.role, 'teacher');
+      assert.equal(response.data.user.grade, '', 'у учителя класса нет');
+
+      const login = await uchitel.post('/api/auth/login', {
+        username: uchitel.name,
+        password: 'parol-dlya-uchitelya',
+      });
+      assert.equal(login.status, 200, 'заведённым аккаунтом можно войти');
+      uchitel.id = login.data.user.id;
+    });
+
+    it('учителя видно учителем, а не безымянным аккаунтом', async () => {
+      const found = await anya.get(`/api/users?search=${uchitel.name}`);
+      const person = found.data.people.find((item) => item.username === uchitel.name);
+      assert.ok(person, 'учитель есть в каталоге школы');
+      assert.equal(person.isTeacher, true);
+      assert.equal(person.grade, '');
+    });
+
+    it('ученику заводят аккаунт только с классом', async () => {
+      const bad = await direktor.post('/api/admin/users', {
+        username: `uchenik_${suffix}`,
+        password: 'ochen-nadyozhnyy-parol',
+        role: 'member',
+      });
+      assert.equal(bad.status, 400, 'ученику класс обязателен');
+
+      const good = await direktor.post('/api/admin/users', {
+        username: naruzhu.name,
+        displayName: 'Новенький',
+        password: 'ochen-nadyozhnyy-parol',
+        role: 'member',
+        grade: '5Г',
+      });
+      assert.equal(good.status, 201);
+      assert.equal(good.data.user.grade, '5Г');
+      assert.equal(good.data.user.role, 'member');
+      naruzhu.id = good.data.user.id;
+    });
+
+    it('администратором аккаунт через панель не сделать', async () => {
+      const response = await direktor.post('/api/admin/users', {
+        username: `vtoroy_admin_${suffix}`,
+        password: 'ochen-nadyozhnyy-parol',
+        role: 'admin',
+        grade: '9О',
+      });
+      assert.equal(response.status, 400, 'роль администратора выдаётся не отсюда');
+    });
+
+    it('занятый логин второй раз не заводится', async () => {
+      const response = await direktor.post('/api/admin/users', {
+        username: anya.name,
+        password: 'ochen-nadyozhnyy-parol',
+        role: 'teacher',
+      });
+      assert.equal(response.status, 409);
+    });
+
+    it('блокировка закрывает вход и обрывает открытую сессию', async () => {
+      // Заблокированный сидит в мессенджере прямо сейчас.
+      const before = await naruzhu.post('/api/auth/login', {
+        username: naruzhu.name,
+        password: 'ochen-nadyozhnyy-parol',
+      });
+      assert.equal(before.status, 200);
+      assert.equal((await naruzhu.get('/api/conversations')).status, 200);
+
+      const blocked = await direktor.patch(`/api/admin/users/${naruzhu.id}`, {
+        blocked: true,
+        reason: 'ругался в общем чате',
+      });
+      assert.equal(blocked.status, 200);
+      assert.equal(blocked.data.user.blocked, true);
+      assert.equal(blocked.data.user.blockedReason, 'ругался в общем чате');
+
+      // Открытая вкладка перестаёт работать сразу, без перезахода.
+      assert.equal(
+        (await naruzhu.get('/api/conversations')).status,
+        401,
+        'сессии заблокированного закрыты',
+      );
+
+      const again = await naruzhu.post('/api/auth/login', {
+        username: naruzhu.name,
+        password: 'ochen-nadyozhnyy-parol',
+      });
+      assert.equal(again.status, 403, 'с верным паролем всё равно не пускает');
+      assert.match(again.data.error, /ругался в общем чате/, 'человеку говорят причину');
+    });
+
+    it('разблокировка возвращает вход', async () => {
+      const response = await direktor.patch(`/api/admin/users/${naruzhu.id}`, { blocked: false });
+      assert.equal(response.status, 200);
+      assert.equal(response.data.user.blocked, false);
+      assert.equal(response.data.user.blockedReason, '');
+
+      const login = await naruzhu.post('/api/auth/login', {
+        username: naruzhu.name,
+        password: 'ochen-nadyozhnyy-parol',
+      });
+      assert.equal(login.status, 200);
+    });
+
+    it('администратор ставит новый пароль вместо забытого', async () => {
+      const response = await direktor.patch(`/api/admin/users/${uchitel.id}`, {
+        password: 'novyy-parol-uchitelya',
+      });
+      assert.equal(response.status, 200);
+
+      const old = await new Client(uchitel.name).post('/api/auth/login', {
+        username: uchitel.name,
+        password: 'parol-dlya-uchitelya',
+      });
+      assert.equal(old.status, 401, 'старый пароль больше не работает');
+
+      const fresh = new Client(uchitel.name);
+      const login = await fresh.post('/api/auth/login', {
+        username: uchitel.name,
+        password: 'novyy-parol-uchitelya',
+      });
+      assert.equal(login.status, 200, 'входит по новому паролю');
+    });
+
+    it('смена пароля закрывает чужие устройства', async () => {
+      // uchitel всё ещё держит куку от входа по старому паролю.
+      assert.equal(
+        (await uchitel.get('/api/conversations')).status,
+        401,
+        'после смены пароля старая сессия недействительна',
+      );
+    });
+
+    it('короткий пароль администратор поставить не может', async () => {
+      const response = await direktor.patch(`/api/admin/users/${naruzhu.id}`, { password: '123' });
+      assert.equal(response.status, 400);
+    });
+
+    it('свой аккаунт через панель не блокируется', async () => {
+      const response = await direktor.patch(`/api/admin/users/${direktor.id}`, { blocked: true });
+      assert.equal(response.status, 400, 'иначе администратор запирает сам себя');
+
+      const me = await direktor.get('/api/auth/me');
+      assert.equal(me.status, 200, 'администратор на месте');
+    });
+
+    it('пустой запрос ничего не меняет', async () => {
+      const response = await direktor.patch(`/api/admin/users/${naruzhu.id}`, {});
+      assert.equal(response.status, 400);
+    });
+
+    it('несуществующий аккаунт — 404, мусор в адресе — 400', async () => {
+      assert.equal(
+        (await direktor.patch('/api/admin/users/99999999', { blocked: true })).status,
+        404,
+      );
+      assert.equal(
+        (await direktor.patch('/api/admin/users/1%20OR%201=1', { blocked: true })).status,
+        400,
+      );
+    });
+  });
+
   describe('Безопасность', () => {
     it('нельзя выдать себе роль администратора при регистрации', async () => {
       const impostor = new Client(`samozvanets_${suffix}`);
@@ -721,7 +961,7 @@ describe('Перемена — проверка API', () => {
 
     it('подделанный токен сессии не работает', async () => {
       const response = await fetch(`${BASE}/api/conversations`, {
-        headers: { cookie: 'peremena_session=poddelannyy-token' },
+        headers: { cookie: 'gimroom_session=poddelannyy-token' },
       });
       assert.equal(response.status, 401);
     });

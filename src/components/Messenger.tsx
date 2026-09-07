@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AdminDialog from './AdminDialog';
 import ChatView from './ChatView';
 import NewChatDialog from './NewChatDialog';
 import ProfileDialog from './ProfileDialog';
@@ -57,7 +58,6 @@ function mergeMessage(list: ChatMessage[], incoming: ChatMessage, myId: number):
 export interface GradesConfig {
   parallels: readonly number[];
   letters: readonly string[];
-  staffLabel: string;
 }
 
 interface MessengerProps {
@@ -78,6 +78,7 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
   // На телефоне высоту задаёт видимая область, а не окно: иначе клавиатура
@@ -124,7 +125,7 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
 
   // Счётчик непрочитанных в заголовке вкладки.
   useEffect(() => {
-    document.title = totalUnread > 0 ? `(${totalUnread}) Перемена` : 'Перемена — школьный мессенджер';
+    document.title = totalUnread > 0 ? `(${totalUnread}) ГимРум` : 'ГимРум — мессенджер Кировской гимназии';
   }, [totalUnread]);
 
   const refreshConversations = useCallback(async () => {
@@ -256,8 +257,8 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
         const notification = new Notification(title, {
           body: body.slice(0, 140),
           // Тег схлопывает подряд идущие уведомления из одного чата в одно.
-          tag: `peremena-${message.conversationId}`,
-          icon: '/icon.svg',
+          tag: `gimroom-${message.conversationId}`,
+          icon: '/mark.svg',
         });
         notification.onclick = () => {
           window.focus();
@@ -530,6 +531,7 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
         onSelect={openConversation}
         onNewChat={() => setShowNewChat(true)}
         onOpenProfile={() => setShowProfile(true)}
+        onOpenAdmin={() => setShowAdmin(true)}
       />
 
       <ChatView
@@ -563,6 +565,10 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
           onClose={() => setShowProfile(false)}
           onUpdated={setMe}
         />
+      ) : null}
+
+      {showAdmin && me.role === 'admin' ? (
+        <AdminDialog me={me} grades={grades} onClose={() => setShowAdmin(false)} />
       ) : null}
     </div>
   );

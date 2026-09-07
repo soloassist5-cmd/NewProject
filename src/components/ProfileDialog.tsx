@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar';
 import { CloseIcon, LogoutIcon } from './Icons';
 import { api, ApiError } from '@/lib/client';
+import { roleLabel } from '@/lib/format';
 import type { GradesConfig } from './Messenger';
 import type { Attachment, Me } from '@/lib/types';
 
@@ -35,6 +36,12 @@ export default function ProfileDialog({ me, grades, onClose, onUpdated }: Profil
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Сотрудник гимназии: класса нет и выбирать его незачем. Первый
+  // зарегистрировавшийся становится администратором, оставаясь учеником, —
+  // поэтому смотрим не только на роль, но и на класс.
+  const staffTitle = roleLabel(me.role);
+  const isStaff = staffTitle !== '' && me.grade === '';
 
   useEffect(() => {
     setNotificationState(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
@@ -175,37 +182,47 @@ export default function ProfileDialog({ me, grades, onClose, onUpdated }: Profil
             />
           </label>
 
-          <div className="field">
-            <span className="field-label">Класс</span>
-            <div className="grade-picker">
-              <select
-                className="input"
-                value={parallel}
-                onChange={(event) => setParallel(event.target.value)}
-                aria-label="Параллель"
-              >
-                <option value="">{grades.staffLabel}</option>
-                {grades.parallels.map((value) => (
-                  <option key={value} value={value}>
-                    {value} класс
-                  </option>
-                ))}
-              </select>
-              <select
-                className="input"
-                value={letter}
-                onChange={(event) => setLetter(event.target.value)}
-                disabled={parallel === ''}
-                aria-label="Литера класса"
-              >
-                {grades.letters.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
+          {/* У учителя класса нет — вместо выбора показываем, кто он. */}
+          {isStaff ? (
+            <div className="field">
+              <span className="field-label">Статус</span>
+              <input className="input" value={staffTitle} disabled />
+              <span className="field-hint">Аккаунт завёл администратор гимназии.</span>
             </div>
-          </div>
+          ) : (
+            <div className="field">
+              <span className="field-label">Класс</span>
+              <div className="grade-picker">
+                <select
+                  className="input"
+                  value={parallel}
+                  onChange={(event) => setParallel(event.target.value)}
+                  aria-label="Параллель"
+                >
+                  <option value="" disabled>
+                    Параллель
+                  </option>
+                  {grades.parallels.map((value) => (
+                    <option key={value} value={value}>
+                      {value} класс
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="input"
+                  value={letter}
+                  onChange={(event) => setLetter(event.target.value)}
+                  aria-label="Литера класса"
+                >
+                  {grades.letters.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           <div className="field">
             <span className="field-label">Логин</span>

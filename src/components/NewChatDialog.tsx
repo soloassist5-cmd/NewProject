@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Avatar from './Avatar';
 import { CloseIcon, SearchIcon } from './Icons';
 import { api, ApiError } from '@/lib/client';
+import { personSubtitle } from '@/lib/format';
 import type { Person } from '@/lib/types';
 
 interface NewChatDialogProps {
@@ -207,7 +208,7 @@ export default function NewChatDialog({
                           <div className="person-name">{person.displayName}</div>
                           <div className="person-handle">
                             @{person.username}
-                            {person.grade ? ` · ${person.grade}` : ''}
+                            {personSubtitle(person) ? ` · ${personSubtitle(person)}` : ''}
                           </div>
                         </div>
                         {isSelected ? <span aria-hidden>✓</span> : null}

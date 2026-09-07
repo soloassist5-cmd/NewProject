@@ -18,15 +18,15 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   maximumScale: 1,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f4f5f9' },
-    { media: '(prefers-color-scheme: dark)', color: '#0e1016' },
+    { media: '(prefers-color-scheme: light)', color: '#eef3f8' },
+    { media: '(prefers-color-scheme: dark)', color: '#0b1219' },
   ],
 };
 
 /** Применяет сохранённую тему до первой отрисовки, чтобы не мигало белым. */
 const themeScript = `
 try {
-  var saved = localStorage.getItem('peremena-theme');
+  var saved = localStorage.getItem('gimroom-theme');
   if (saved === 'dark' || saved === 'light') {
     document.documentElement.dataset.theme = saved;
   }

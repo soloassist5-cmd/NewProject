@@ -3,7 +3,7 @@
 // переписка и общий чат класса. Удобно, чтобы посмотреть интерфейс,
 // не регистрируя всех вручную.
 //
-// Пароль у всех демо-аккаунтов: peremena-demo
+// Пароль у всех демо-аккаунтов: gimroom-demo
 
 import { randomBytes, scrypt as scryptCallback } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -11,7 +11,7 @@ import pg from 'pg';
 
 const scrypt = promisify(scryptCallback);
 const SCRYPT = { N: 32768, r: 8, p: 1, maxmem: 96 * 1024 * 1024 };
-const PASSWORD = 'peremena-demo';
+const PASSWORD = 'gimroom-demo';
 const GROUP_CODE = 'GYMN24';
 
 const connectionString = process.env.DATABASE_URL;
@@ -26,12 +26,14 @@ async function hashPassword(password) {
   return ['scrypt', SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString('base64'), key.toString('base64')].join('$');
 }
 
+// Роль «teacher» — как у аккаунтов, которые заводит администратор: класса нет,
+// рядом с именем показывается должность.
 const PEOPLE = [
-  { username: 'anya', displayName: 'Аня Смирнова', grade: '9О', color: 'violet', bio: 'редколлегия' },
-  { username: 'petya', displayName: 'Петя Иванов', grade: '9О', color: 'blue', bio: '' },
-  { username: 'dasha', displayName: 'Даша Орлова', grade: '9Г', color: 'teal', bio: 'волейбол' },
-  { username: 'kostya', displayName: 'Костя Лебедев', grade: '10Э', color: 'amber', bio: '' },
-  { username: 'ivanova', displayName: 'Мария Ивановна', grade: '', color: 'green', bio: 'учитель алгебры' },
+  { username: 'anya', displayName: 'Аня Смирнова', grade: '9О', role: 'member', color: 'violet', bio: 'редколлегия' },
+  { username: 'petya', displayName: 'Петя Иванов', grade: '9О', role: 'member', color: 'blue', bio: '' },
+  { username: 'dasha', displayName: 'Даша Орлова', grade: '9Г', role: 'member', color: 'teal', bio: 'волейбол' },
+  { username: 'kostya', displayName: 'Костя Лебедев', grade: '10Э', role: 'member', color: 'amber', bio: '' },
+  { username: 'ivanova', displayName: 'Мария Ивановна', grade: '', role: 'teacher', color: 'green', bio: 'алгебра' },
 ];
 
 const isLocal = /@(localhost|127\.0\.0\.1)/.test(connectionString);
@@ -48,13 +50,14 @@ try {
 
   for (const person of PEOPLE) {
     const { rows } = await client.query(
-      `INSERT INTO users (username, display_name, grade, password_hash, avatar_color, bio)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO users (username, display_name, grade, password_hash, avatar_color, bio, role)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (username) DO UPDATE SET
          display_name = EXCLUDED.display_name,
-         grade = EXCLUDED.grade
+         grade = EXCLUDED.grade,
+         role = EXCLUDED.role
        RETURNING id`,
-      [person.username, person.displayName, person.grade, hash, person.color, person.bio],
+      [person.username, person.displayName, person.grade, hash, person.color, person.bio, person.role],
     );
     ids[person.username] = Number(rows[0].id);
   }

@@ -8,7 +8,6 @@ interface AuthScreenProps {
   schoolName: string;
   parallels: readonly number[];
   letters: readonly string[];
-  staffLabel: string;
 }
 
 /** Вход и регистрация. После успеха перезагружаем страницу — сессия уже в куке. */
@@ -17,7 +16,6 @@ export default function AuthScreen({
   schoolName,
   parallels,
   letters,
-  staffLabel,
 }: AuthScreenProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -29,7 +27,6 @@ export default function AuthScreen({
   const [busy, setBusy] = useState(false);
 
   const isRegister = mode === 'register';
-  const isStaff = parallel === '';
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -43,7 +40,7 @@ export default function AuthScreen({
         await api.post('/api/auth/register', {
           username,
           password,
-          grade: isStaff ? '' : `${parallel}${letter}`,
+          grade: `${parallel}${letter}`,
           inviteCode,
         });
       } else {
@@ -60,18 +57,20 @@ export default function AuthScreen({
   return (
     <main className="auth-screen">
       <div className="auth-card">
-        <div className="auth-brand">
-          <span className="brand-mark">П</span>
-          <div>
-            <h1 className="auth-title">Перемена</h1>
-            <p className="auth-school">{schoolName}</p>
-          </div>
+        {/* Герб гимназии — картинкой, а не буквой в цветном квадрате. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="auth-emblem" src="/emblem.png" alt="" width={84} height={84} />
+
+        <div className="auth-heading">
+          <h1 className="auth-title">ГимРум</h1>
+          <p className="auth-school">{schoolName}</p>
+          <div className="auth-rule" />
+          <p className="auth-subtitle">
+            {isRegister
+              ? 'Придумайте логин и пароль и выберите свой класс.'
+              : 'Свой чат гимназии. Войдите, чтобы продолжить.'}
+          </p>
         </div>
-        <p className="auth-subtitle">
-          {isRegister
-            ? 'Придумайте логин и пароль и выберите свой класс.'
-            : 'Мессенджер для своих. Войдите, чтобы продолжить.'}
-        </p>
 
         <form className="auth-form" onSubmit={submit}>
           {error ? <div className="error-banner">{error}</div> : null}
@@ -117,8 +116,11 @@ export default function AuthScreen({
                   value={parallel}
                   onChange={(event) => setParallel(event.target.value)}
                   aria-label="Параллель"
+                  required
                 >
-                  <option value="">{staffLabel}</option>
+                  <option value="" disabled>
+                    Параллель
+                  </option>
                   {parallels.map((value) => (
                     <option key={value} value={value}>
                       {value} класс
@@ -130,7 +132,6 @@ export default function AuthScreen({
                   className="input"
                   value={letter}
                   onChange={(event) => setLetter(event.target.value)}
-                  disabled={isStaff}
                   aria-label="Литера класса"
                 >
                   {letters.map((value) => (
@@ -141,7 +142,9 @@ export default function AuthScreen({
                 </select>
               </div>
               <span className="field-hint">
-                {isStaff ? 'Класс не указывается.' : `Ваш класс: ${parallel}${letter}`}
+                {parallel === ''
+                  ? 'Выберите параллель и литеру.'
+                  : `Ваш класс: ${parallel}${letter}`}
               </span>
             </div>
           ) : null}

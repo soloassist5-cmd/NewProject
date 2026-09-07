@@ -16,7 +16,9 @@ export interface Person {
   id: number;
   username: string;
   displayName: string;
+  /** Класс вида «9О». У учителей пусто — вместо класса показывают должность. */
   grade: string;
+  isTeacher: boolean;
   avatarColor: string;
   avatarFileId: number | null;
   bio: string;

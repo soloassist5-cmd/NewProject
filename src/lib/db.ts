@@ -9,7 +9,7 @@ types.setTypeParser(1700, (value) => Number.parseFloat(value));
 
 declare global {
   // eslint-disable-next-line no-var
-  var __peremenaPool: Pool | undefined;
+  var __gimroomPool: Pool | undefined;
 }
 
 /**
@@ -67,14 +67,14 @@ function createPool(): Pool {
 }
 
 export function pool(): Pool {
-  if (!global.__peremenaPool) {
-    global.__peremenaPool = createPool();
+  if (!global.__gimroomPool) {
+    global.__gimroomPool = createPool();
     // Пул не должен ронять процесс из-за оборванного простаивающего соединения.
-    global.__peremenaPool.on('error', (error) => {
+    global.__gimroomPool.on('error', (error) => {
       console.error('Ошибка простаивающего соединения с БД:', error.message);
     });
   }
-  return global.__peremenaPool;
+  return global.__gimroomPool;
 }
 
 /**

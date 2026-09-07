@@ -15,7 +15,6 @@ export default async function HomePage() {
         schoolName={config.schoolName}
         parallels={config.grades.parallels}
         letters={config.grades.letters}
-        staffLabel={config.grades.staffLabel}
       />
     );
   }
@@ -26,7 +25,6 @@ export default async function HomePage() {
       grades={{
         parallels: config.grades.parallels,
         letters: config.grades.letters,
-        staffLabel: config.grades.staffLabel,
       }}
       me={{
         id: user.id,

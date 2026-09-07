@@ -1,8 +1,8 @@
 {
-  "name": "peremena",
+  "name": "gimroom",
   "version": "0.1.0",
   "private": true,
-  "description": "Перемена — мессенджер для общения внутри школы",
+  "description": "ГимРум — мессенджер МБОУ Кировская Гимназия",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

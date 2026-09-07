@@ -34,6 +34,9 @@ export function parseDisplayName(raw: unknown): string {
 /**
  * Класс вида «9О», «11Э». Пустая строка допустима — так отмечают учителей и
  * других сотрудников гимназии, у которых класса нет.
+ *
+ * Сами себе такой аккаунт не заводят: при регистрации класс обязателен
+ * (см. parseStudentGrade), а аккаунты сотрудников создаёт администратор.
  */
 export function parseGrade(raw: unknown): string {
   if (raw === null || raw === undefined) return '';
@@ -60,6 +63,27 @@ export function parseGrade(raw: unknown): string {
   }
 
   return `${parallel}${letter}`;
+}
+
+/** Класс при регистрации: обязателен, «без класса» тут не бывает. */
+export function parseStudentGrade(raw: unknown): string {
+  const grade = parseGrade(raw);
+  if (!grade) throw new ValidationError('Выберите свой класс.');
+  return grade;
+}
+
+/**
+ * Роль аккаунта, который заводит администратор.
+ *
+ * Администратора через панель не выдают: эта роль достаётся первому
+ * зарегистрировавшемуся или тому, кто указан в ADMIN_USERNAME. Так учётная
+ * запись с правами модератора не может появиться в один клик — в том числе
+ * если чужой рукой открыта админская вкладка.
+ */
+export function parseNewUserRole(raw: unknown): 'member' | 'teacher' {
+  if (raw === undefined || raw === null || raw === '') return 'member';
+  if (raw === 'member' || raw === 'teacher') return raw;
+  throw new ValidationError('Роль аккаунта: ученик или учитель.');
 }
 
 /** Код приглашения в группу: приводим к канону, чтобы регистр и пробелы не мешали. */

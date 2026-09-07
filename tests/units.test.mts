@@ -14,6 +14,8 @@ import {
   parseGrade,
   parseJoinCode,
   parseMessageBody,
+  parseNewUserRole,
+  parseStudentGrade,
   parseUsername,
   ValidationError,
 } from '../src/lib/validate.ts';
@@ -122,6 +124,31 @@ describe('Класс гимназии', () => {
   it('отклоняет бессмыслицу', () => {
     assert.throws(() => parseGrade('класс'), ValidationError);
     assert.throws(() => parseGrade('9'), ValidationError);
+  });
+
+  it('при регистрации класс обязателен', () => {
+    assert.equal(parseStudentGrade('9о'), '9О');
+    assert.throws(() => parseStudentGrade(''), ValidationError);
+    assert.throws(() => parseStudentGrade(null), ValidationError);
+    assert.throws(() => parseStudentGrade(undefined), ValidationError);
+  });
+});
+
+describe('Роль нового аккаунта', () => {
+  it('по умолчанию — ученик', () => {
+    assert.equal(parseNewUserRole(undefined), 'member');
+    assert.equal(parseNewUserRole(''), 'member');
+  });
+
+  it('разрешает завести учителя', () => {
+    assert.equal(parseNewUserRole('teacher'), 'teacher');
+    assert.equal(parseNewUserRole('member'), 'member');
+  });
+
+  it('администратора через панель не выдаёт', () => {
+    assert.throws(() => parseNewUserRole('admin'), ValidationError);
+    assert.throws(() => parseNewUserRole('owner'), ValidationError);
+    assert.throws(() => parseNewUserRole(['admin']), ValidationError);
   });
 });
 

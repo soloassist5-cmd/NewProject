@@ -1,6 +1,25 @@
 import type { ReactNode } from 'react';
 import { createElement, Fragment } from 'react';
 
+/**
+ * Подпись роли в гимназии. У ученика её нет — рядом с именем он показывается
+ * классом, а не должностью.
+ */
+export function roleLabel(role: string): string {
+  if (role === 'teacher') return 'Учитель';
+  if (role === 'admin') return 'Администратор';
+  return '';
+}
+
+/**
+ * Что писать рядом с именем: класс у ученика, должность у сотрудника.
+ * Возвращает пустую строку, если сказать нечего.
+ */
+export function personSubtitle(person: { grade: string; isTeacher?: boolean }): string {
+  if (person.grade) return person.grade;
+  return person.isTeacher ? roleLabel('teacher') : '';
+}
+
 const MONTHS_GENITIVE = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
