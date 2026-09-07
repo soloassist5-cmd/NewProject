@@ -37,10 +37,12 @@ fn app_directory() -> Option<PathBuf> {
     Some(path)
 }
 
-/// Пишет файл, если его ещё нет или он от другой версии.
+/// Пишет файл, если его ещё нет или он отличается от вшитого.
 fn ensure_file(path: &Path, bytes: &[u8]) -> bool {
-    if let Ok(existing) = fs::metadata(path) {
-        if existing.len() == bytes.len() as u64 {
+    // Сравниваем содержимое, а не только длину: размер после пересборки часто
+    // остаётся прежним до байта, и по нему новая версия сошла бы за старую.
+    if let Ok(existing) = fs::read(path) {
+        if existing == bytes {
             return true; // Тот же файл — перезаписывать нечего.
         }
     }

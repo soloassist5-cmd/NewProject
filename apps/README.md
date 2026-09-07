@@ -99,7 +99,24 @@ cp ~/.cargo/registry/src/*/webview2-com-sys-*/x64/WebView2Loader.dll dist/
 # 2. Один файл, который несёт приложение в себе
 cd ../bundle
 cargo build --release --target x86_64-pc-windows-gnu
-# готово: target/x86_64-pc-windows-gnu/release/gimroom-setup.exe
+
+# 3. Готовое — в apps/dist, и раздают только оттуда
+cd ../..
+mkdir -p apps/dist
+cp apps/bundle/target/x86_64-pc-windows-gnu/release/gimroom-setup.exe \
+   apps/dist/gimroom-windows.exe
+```
+
+**Людям отдают только `apps/dist/gimroom-windows.exe`.** Файл из
+`native/dist/` — это заготовка для сборки, а не программа: он требует
+`WebView2Loader.dll` рядом с собой, и запущенный сам по себе встречает
+человека системной ошибкой «не удаётся продолжить выполнение кода».
+Проверить, что перед вами настоящий одиночный файл, можно по списку
+зависимостей — `WebView2Loader.dll` в нём быть не должно:
+
+```bash
+llvm-objdump -p apps/dist/gimroom-windows.exe | grep 'DLL Name'
+# только KERNEL32, msvcrt, ntdll и api-ms-win-core-*
 ```
 
 Адрес сайта задан константой `SITE` в `native/src/main.rs`.
