@@ -5,6 +5,7 @@ import Avatar from './Avatar';
 import { CloseIcon, SendIcon } from './Icons';
 import { api, ApiError } from '@/lib/client';
 import { formatPresence, personSubtitle } from '@/lib/format';
+import { rememberRecent } from '@/lib/recent';
 import type { Person } from '@/lib/types';
 
 interface PersonDialogProps {
@@ -39,7 +40,11 @@ export default function PersonDialog({ personId, meId, onClose, onWrite }: Perso
     (async () => {
       try {
         const data = await api.get<{ user: Person }>(`/api/users/${personId}`);
-        if (!cancelled) setPerson(data.user);
+        if (cancelled) return;
+        setPerson(data.user);
+        // Кого открывали — тот попадает в недавние. Пустой диалог в списке
+        // чатов не остаётся, и вернуться к человеку иначе было бы негде.
+        rememberRecent(data.user);
       } catch (caught) {
         if (!cancelled) {
           setError(caught instanceof ApiError ? caught.message : 'Не удалось открыть профиль.');

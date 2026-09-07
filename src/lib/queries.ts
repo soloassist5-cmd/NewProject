@@ -349,8 +349,16 @@ function toConversationSummary(row: ConversationRow): ConversationSummary {
 }
 
 export async function listConversations(userId: number): Promise<ConversationSummary[]> {
+  // Личный диалог без единого сообщения в списке не показываем: он заводится
+  // от одного захода в чужой профиль, и список быстро зарастает людьми, с
+  // которыми так и не поговорили. Такой диалог никуда не пропадает — он
+  // появится в списке с первым сообщением, а до тех пор человек остаётся в
+  // недавних. У групп иначе: туда вступают осознанно, и пустая группа
+  // (в неё только что вошли по коду) должна быть видна сразу.
   const result = await pool().query(
-    `${CONVERSATION_SELECT} WHERE cm.user_id = $1 ORDER BY COALESCE(lm.created_at, c.created_at) DESC LIMIT 200`,
+    `${CONVERSATION_SELECT}
+     WHERE cm.user_id = $1 AND (c.kind <> 'dm' OR lm.id IS NOT NULL)
+     ORDER BY COALESCE(lm.created_at, c.created_at) DESC LIMIT 200`,
     [userId],
   );
   return (result.rows as ConversationRow[]).map(toConversationSummary);

@@ -180,6 +180,34 @@ body {
   -webkit-font-smoothing: antialiased;
   /* Серая вспышка при касании выглядит как поломка, а не как отклик. */
   -webkit-tap-highlight-color: transparent;
+  /* Палец — не мышь: касание с малейшим сдвигом телефон понимает как «выделить»,
+     и вместо перехода по имени собеседника оно просто загорается синим. Поэтому
+     сам интерфейс не выделяется — выделяется только то, что осмысленно
+     скопировать (список исключений ниже). */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Здесь текст — это текст, а не кнопка: его выделяют, чтобы скопировать. */
+input,
+textarea,
+.bubble-text,
+.bubble-deleted,
+.bubble-reply-text,
+.search-result-text,
+.person-card-bio,
+.join-code {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Долгое нажатие на аватар или значок предлагало «сохранить картинку» —
+   в мессенджере это лишнее меню поверх разговора. */
+.avatar,
+.brand-mark,
+.auth-emblem,
+svg {
+  -webkit-touch-callout: none;
 }
 
 /* Отключает ожидание двойного тапа для зума: касания срабатывают сразу. */
@@ -1769,6 +1797,35 @@ a {
 .person-handle {
   font-size: 12.5px;
   color: var(--text-muted);
+}
+
+/* Недавние собеседники в поиске: строчка и крестик рядом с ней. */
+.recent-row {
+  display: flex;
+  align-items: center;
+}
+
+.recent-row .person-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.recent-forget {
+  flex-shrink: 0;
+  border-radius: var(--radius);
+  /* На телефоне крестик всегда виден: наводить там нечем. */
+  opacity: 0.5;
+}
+
+.recent-row:hover .recent-forget,
+.recent-forget:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .recent-forget {
+    opacity: 0;
+  }
 }
 
 .people-list {

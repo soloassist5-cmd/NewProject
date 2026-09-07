@@ -198,6 +198,15 @@ describe('ГимРум — проверка API', () => {
       dmId = response.data.conversation.id;
     });
 
+    it('не держит в списке диалог, в котором никто не написал', async () => {
+      const list = await anya.get('/api/conversations');
+      assert.equal(list.status, 200);
+      assert.ok(
+        !list.data.conversations.some((item) => item.id === dmId),
+        'пустой диалог в списке чатов не показывается — человек остаётся в недавних',
+      );
+    });
+
     it('не создаёт второй диалог между теми же людьми', async () => {
       const response = await petya.post('/api/conversations', { kind: 'dm', userId: anya.id });
       assert.equal(response.status, 201);

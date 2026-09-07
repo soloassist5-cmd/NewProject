@@ -2,10 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import Avatar from './Avatar';
-import { BellOffIcon, MoonIcon, PlusIcon, SearchIcon, ShieldIcon, SunIcon } from './Icons';
+import {
+  BellOffIcon,
+  CloseIcon,
+  MoonIcon,
+  PlusIcon,
+  SearchIcon,
+  ShieldIcon,
+  SunIcon,
+} from './Icons';
 import { api } from '@/lib/client';
 import { formatListTime, highlight, personSubtitle, roleLabel } from '@/lib/format';
 import { isNativeApp } from '@/lib/native';
+import { forgetRecent, listRecent, type RecentPerson } from '@/lib/recent';
 import type { ChatMessage, Conversation, Me, Person } from '@/lib/types';
 
 interface SidebarProps {
@@ -38,6 +47,10 @@ export default function Sidebar({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ messages: ChatMessage[]; people: Person[] } | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark' | null>(null);
+  // История поиска: кого недавно открывали. Показывается, пока в строке поиска
+  // ещё нечего искать, и заменяет собой список чатов.
+  const [recent, setRecent] = useState<RecentPerson[]>([]);
+  const [searching, setSearching] = useState(false);
 
   // Под своим именем — класс, а у сотрудника гимназии должность.
   const meSubtitle = me.grade || roleLabel(me.role);
@@ -120,6 +133,23 @@ export default function Sidebar({
             className="input"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onFocus={() => {
+              // Список читаем при каждом заходе в поиск: за это время могли
+              // кого-то открыть из чата, и он тоже должен оказаться в недавних.
+              setRecent(listRecent());
+              setSearching(true);
+            }}
+            onBlur={() => {
+              // Нажатие по строчке снимает фокус раньше, чем срабатывает сам
+              // клик, — поэтому список убираем не сразу.
+              window.setTimeout(() => setSearching(false), 150);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setQuery('');
+                event.currentTarget.blur();
+              }
+            }}
             placeholder="Поиск по чатам и людям"
             type="search"
             aria-label="Поиск"
@@ -147,6 +177,15 @@ export default function Sidebar({
               setQuery('');
               onOpenPerson(personId);
             }}
+          />
+        ) : searching && recent.length > 0 ? (
+          <RecentList
+            people={recent}
+            onOpen={(personId) => {
+              setSearching(false);
+              onOpenPerson(personId);
+            }}
+            onForget={(personId) => setRecent(forgetRecent(personId))}
           />
         ) : loading ? (
           <p className="list-section-title">Загружаем чаты…</p>
@@ -252,6 +291,53 @@ function NotificationPrompt() {
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Недавние собеседники.
+ *
+ * Заход в чужой профиль больше не заводит вечную строчку в списке чатов —
+ * человек оказывается здесь. Крестик убирает его совсем: список свой, и
+ * чистить его человек вправе сам.
+ */
+function RecentList({
+  people,
+  onOpen,
+  onForget,
+}: {
+  people: RecentPerson[];
+  onOpen: (personId: number) => void;
+  onForget: (personId: number) => void;
+}) {
+  return (
+    <>
+      <p className="list-section-title">Недавние</p>
+      {people.map((person) => (
+        <div className="recent-row" key={person.id}>
+          <button className="person-row" onClick={() => onOpen(person.id)}>
+            <Avatar
+              name={person.displayName}
+              color={person.avatarColor}
+              fileId={person.avatarFileId}
+              size={36}
+            />
+            <div className="person-body">
+              <div className="person-name">{person.displayName}</div>
+              <div className="person-handle">@{person.username}</div>
+            </div>
+          </button>
+          <button
+            className="btn-ghost recent-forget"
+            onClick={() => onForget(person.id)}
+            title="Убрать из недавних"
+            aria-label={`Убрать ${person.displayName} из недавних`}
+          >
+            <CloseIcon size={15} />
+          </button>
+        </div>
+      ))}
+    </>
   );
 }
 

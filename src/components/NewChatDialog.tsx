@@ -10,6 +10,7 @@ import type { Person } from '@/lib/types';
 interface NewChatDialogProps {
   onClose: () => void;
   onStartDirect: (personId: number) => Promise<void>;
+  onOpenPerson: (personId: number) => void;
   onCreateGroup: (title: string, memberIds: number[]) => Promise<void>;
   onJoinByCode: (code: string) => Promise<void>;
 }
@@ -17,6 +18,7 @@ interface NewChatDialogProps {
 export default function NewChatDialog({
   onClose,
   onStartDirect,
+  onOpenPerson,
   onCreateGroup,
   onJoinByCode,
 }: NewChatDialogProps) {
@@ -32,6 +34,14 @@ export default function NewChatDialog({
   useEffect(() => {
     if (mode === 'code') return;
 
+    // Пока ничего не введено, список пуст. Показывать всю школу разом
+    // бессмысленно: нужного человека в этом списке всё равно не найти, а
+    // выглядит это как каталог, который зачем-то листают.
+    if (!search.trim()) {
+      setPeople([]);
+      return;
+    }
+
     const timer = setTimeout(async () => {
       try {
         const data = await api.get<{ people: Person[] }>(
@@ -41,7 +51,7 @@ export default function NewChatDialog({
       } catch {
         setPeople([]);
       }
-    }, search ? 220 : 0);
+    }, 220);
 
     return () => clearTimeout(timer);
   }, [search, mode]);
@@ -182,7 +192,7 @@ export default function NewChatDialog({
               <div className="people-list">
                 {people.length === 0 ? (
                   <p className="list-section-title">
-                    {search ? 'Никого не нашлось' : 'Кроме вас тут пока никого нет'}
+                    {search.trim() ? 'Никого не нашлось' : 'Начните вводить имя или логин'}
                   </p>
                 ) : (
                   people.map((person) => {
@@ -193,8 +203,15 @@ export default function NewChatDialog({
                         className={`person-row${isSelected ? ' is-selected' : ''}`}
                         disabled={busy}
                         onClick={() => {
-                          if (mode === 'group') togglePerson(person);
-                          else void run(() => onStartDirect(person.id));
+                          if (mode === 'group') {
+                            togglePerson(person);
+                            return;
+                          }
+                          // Сначала карточка: по строчке в списке не всегда
+                          // понятно, тот ли это человек, а переписка
+                          // начинается кнопкой в карточке.
+                          onClose();
+                          onOpenPerson(person.id);
                         }}
                       >
                         <Avatar

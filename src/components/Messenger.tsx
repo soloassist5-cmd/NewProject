@@ -9,6 +9,7 @@ import ProfileDialog from './ProfileDialog';
 import Sidebar from './Sidebar';
 import { api } from '@/lib/client';
 import { notifyNativeHost } from '@/lib/native';
+import { rememberRecent } from '@/lib/recent';
 import type {
   ChatMessage,
   Conversation,
@@ -84,6 +85,11 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
   // Чей профиль открыт. Нажатие на имя показывает карточку, а не сразу диалог.
   const [personId, setPersonId] = useState<number | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
+  // Диалог, открытый прямо сейчас, но ещё без единого сообщения. Сервер такие в
+  // списке не отдаёт — иначе список зарастал бы людьми, которым так и не
+  // написали. Пока чат открыт, строчка в списке всё же нужна: без неё непонятно,
+  // где ты находишься. Стоит переключиться на другой чат — и она исчезает.
+  const [draft, setDraft] = useState<Conversation | null>(null);
 
   // На телефоне высоту задаёт видимая область, а не окно: иначе клавиатура
   // накрывает строку ввода.
@@ -117,9 +123,18 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
     };
   }, []);
 
+  // Список для боковой панели: то, что отдал сервер, плюс открытый сейчас
+  // пустой диалог. Как только в нём появится первое сообщение, он придёт с
+  // сервера сам и подставная строчка уступит место настоящей.
+  const visibleConversations = useMemo(() => {
+    if (!draft || draft.id !== activeId) return conversations;
+    if (conversations.some((conversation) => conversation.id === draft.id)) return conversations;
+    return [draft, ...conversations];
+  }, [conversations, draft, activeId]);
+
   const activeConversation = useMemo(
-    () => conversations.find((conversation) => conversation.id === activeId) ?? null,
-    [conversations, activeId],
+    () => visibleConversations.find((conversation) => conversation.id === activeId) ?? null,
+    [visibleConversations, activeId],
   );
 
   const totalUnread = useMemo(
@@ -219,6 +234,8 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
   const openConversation = useCallback(
     async (conversationId: number) => {
       setActiveId(conversationId);
+      // Ушли из пустого диалога — он и пропал: держим только тот, что открыт.
+      setDraft((prev) => (prev && prev.id === conversationId ? prev : null));
       setMobileView('chat');
       setTyping([]);
 
@@ -553,6 +570,10 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
         kind: 'dm',
         userId: withId,
       });
+      // Пока в диалоге пусто, сервер его в списке не покажет — держим строчку
+      // сами, чтобы открытый чат было видно.
+      setDraft(data.conversation.lastMessage ? null : data.conversation);
+      if (data.conversation.partner) rememberRecent(data.conversation.partner);
       await refreshConversations();
       setShowNewChat(false);
       setPersonId(null);
@@ -593,7 +614,7 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
       <Sidebar
         me={me}
         schoolName={schoolName}
-        conversations={conversations}
+        conversations={visibleConversations}
         activeId={activeId}
         loading={loadingConversations}
         connected={connected}
@@ -623,6 +644,7 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
         <NewChatDialog
           onClose={() => setShowNewChat(false)}
           onStartDirect={startDirectChat}
+          onOpenPerson={setPersonId}
           onCreateGroup={createGroup}
           onJoinByCode={joinByCode}
         />
