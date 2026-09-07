@@ -5,6 +5,7 @@ import Avatar from './Avatar';
 import { CloseIcon, LogoutIcon } from './Icons';
 import { api, ApiError } from '@/lib/client';
 import { formatListTime, roleLabel } from '@/lib/format';
+import { currentSurface, type Surface } from '@/lib/native';
 import type { GradesConfig } from './Messenger';
 import type { Attachment, Me } from '@/lib/types';
 
@@ -252,22 +253,7 @@ export default function ProfileDialog({ me, grades, onClose, onUpdated }: Profil
 
           <div className="field">
             <span className="field-label">Уведомления</span>
-            {notificationState === 'unsupported' ? (
-              <span className="field-hint">Браузер не поддерживает уведомления.</span>
-            ) : notificationState === 'granted' ? (
-              <span className="field-hint">Включены: сообщения приходят, даже когда вкладка свёрнута.</span>
-            ) : notificationState === 'denied' ? (
-              <span className="field-hint">
-                Запрещены в настройках браузера. Разрешите их для этого сайта, чтобы получать оповещения.
-              </span>
-            ) : (
-              <button
-                className="btn btn-quiet"
-                onClick={async () => setNotificationState(await Notification.requestPermission())}
-              >
-                Разрешить уведомления
-              </button>
-            )}
+            <NotificationSettings state={notificationState} onChange={setNotificationState} />
           </div>
 
           <details>
@@ -420,5 +406,80 @@ function DeviceList() {
         )}
       </div>
     </details>
+  );
+}
+
+/**
+ * Раздел «Уведомления».
+ *
+ * Подсказка должна вести туда, где настройка действительно есть. Раньше во всех
+ * случаях писали «разрешите в настройках браузера» — а в приложении браузера
+ * нет, и человек упирался в тупик: сделать по такой подсказке нечего.
+ *
+ * Мест, где живёт эта настройка, три, и они не похожи друг на друга:
+ * в окне на Windows уведомления показывает само приложение и разрешение ему не
+ * нужно вовсе; в приложении для Android настройка лежит в системных настройках
+ * телефона; в браузере — в его собственных разрешениях для сайта.
+ */
+function NotificationSettings({
+  state,
+  onChange,
+}: {
+  state: NotificationPermission | 'unsupported';
+  onChange: (next: NotificationPermission) => void;
+}) {
+  const [surface, setSurface] = useState<Surface>('browser');
+
+  // Определяем окружение уже в браузере: на сервере ни window, ни document нет.
+  useEffect(() => setSurface(currentSurface()), []);
+
+  // Своё окно на Windows: уведомления показывает приложение, а не страница, —
+  // значок в панели задач мигает. Разрешение браузера тут ни при чём, и его
+  // отказ (WebView2 всегда отвечает «запрещено») ничего не меняет.
+  if (surface === 'windows-app') {
+    return (
+      <span className="field-hint">
+        Включены: при новом сообщении значок «ГимРума» мигает в панели задач. Отдельное
+        разрешение не нужно.
+      </span>
+    );
+  }
+
+  if (state === 'granted') {
+    return (
+      <span className="field-hint">
+        Включены: сообщения приходят, даже когда мессенджер свёрнут.
+      </span>
+    );
+  }
+
+  if (state === 'unsupported') {
+    return <span className="field-hint">Здесь уведомления не поддерживаются.</span>;
+  }
+
+  if (state === 'denied') {
+    return (
+      <span className="field-hint">
+        {surface === 'android-app'
+          ? 'Запрещены в настройках телефона. Настройки → Приложения → ГимРум → Уведомления — и включите их там.'
+          : surface === 'android-browser'
+            ? 'Запрещены для этого сайта. Нажмите на замок слева от адреса → Разрешения → Уведомления.'
+            : 'Запрещены для этого сайта. Нажмите на замок слева от адреса и разрешите уведомления.'}
+      </span>
+    );
+  }
+
+  return (
+    <>
+      <button
+        className="btn btn-quiet"
+        onClick={async () => onChange(await Notification.requestPermission())}
+      >
+        Разрешить уведомления
+      </button>
+      {surface === 'android-app' ? (
+        <span className="field-hint">Телефон спросит разрешение — подтвердите его.</span>
+      ) : null}
+    </>
   );
 }

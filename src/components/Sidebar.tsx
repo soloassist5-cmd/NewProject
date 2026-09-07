@@ -5,6 +5,7 @@ import Avatar from './Avatar';
 import { BellOffIcon, MoonIcon, PlusIcon, SearchIcon, ShieldIcon, SunIcon } from './Icons';
 import { api } from '@/lib/client';
 import { formatListTime, highlight, personSubtitle, roleLabel } from '@/lib/format';
+import { isNativeApp } from '@/lib/native';
 import type { ChatMessage, Conversation, Me, Person } from '@/lib/types';
 
 interface SidebarProps {
@@ -199,6 +200,10 @@ function NotificationPrompt() {
   const [state, setState] = useState<'hidden' | 'offer' | 'busy'>('hidden');
 
   useEffect(() => {
+    // В своём окне на Windows уведомления показывает само приложение —
+    // мигает значком в панели задач. Разрешение браузера там не нужно, и
+    // спрашивать его бессмысленно: WebView2 всё равно ответит отказом.
+    if (isNativeApp()) return;
     if (typeof Notification === 'undefined') return;
     if (Notification.permission !== 'default') return;
     try {

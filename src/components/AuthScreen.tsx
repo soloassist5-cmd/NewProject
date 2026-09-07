@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/client';
+import { isMobile } from '@/lib/native';
 
 interface AuthScreenProps {
   inviteOnly: boolean;
@@ -31,6 +32,11 @@ export default function AuthScreen({
   const [sharedComputer, setSharedComputer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Вопрос про чужое устройство уместен только за компьютером: телефон —
+  // вещь личная, и лишний флажок на маленьком экране только мешает.
+  const [sharedOffered, setSharedOffered] = useState(false);
+
+  useEffect(() => setSharedOffered(!isMobile()), []);
 
   const isRegister = mode === 'register';
 
@@ -182,6 +188,7 @@ export default function AuthScreen({
             </label>
           ) : null}
 
+          {sharedOffered ? (
           <label className="checkbox-row">
             <input
               type="checkbox"
@@ -197,6 +204,7 @@ export default function AuthScreen({
               </span>
             </span>
           </label>
+          ) : null}
 
           <button className="btn" type="submit" disabled={busy}>
             {busy ? <span className="spinner" /> : null}

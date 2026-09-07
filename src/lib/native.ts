@@ -27,6 +27,49 @@ export function isNativeApp(): boolean {
   return (window as NativeWindow).__gimroomNative === true;
 }
 
+/**
+ * Открыт ли мессенджер внутри приложения для Android.
+ *
+ * Приложение — это обёртка над сайтом (Trusted Web Activity), и страница
+ * отличает её от обычного браузера по тому, кто её открыл: у обёртки это
+ * ссылка вида `android-app://`.
+ */
+export function isAndroidApp(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.referrer.startsWith('android-app://');
+}
+
+/** Телефон или планшет на Android — в приложении или в браузере. */
+export function isAndroid(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /android/i.test(navigator.userAgent);
+}
+
+/**
+ * Телефон или планшет.
+ *
+ * Нужно там, где вопрос имеет смысл только на компьютере. Телефон — вещь
+ * личная: спрашивать у школьника, не чужое ли у него устройство, незачем.
+ */
+export function isMobile(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+/**
+ * Где человек сейчас находится — чтобы подсказки вели туда, где настройка
+ * действительно есть. «Разрешите в настройках браузера» в приложении, где
+ * браузера нет, — тупик: сделать по такой подсказке нечего.
+ */
+export type Surface = 'windows-app' | 'android-app' | 'android-browser' | 'browser';
+
+export function currentSurface(): Surface {
+  if (isNativeApp()) return 'windows-app';
+  if (isAndroidApp()) return 'android-app';
+  if (isAndroid()) return 'android-browser';
+  return 'browser';
+}
+
 function bridge(): WebViewBridge | null {
   if (typeof window === 'undefined') return null;
   const w = window as NativeWindow;
