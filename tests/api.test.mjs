@@ -714,6 +714,113 @@ describe('ГимРум — проверка API', () => {
     });
   });
 
+  describe('Логин и профиль человека', () => {
+    // Отдельный аккаунт: смена логина ограничена паузой, поэтому чужие тесты
+    // не должны от него зависеть.
+    const smena = new Client(`smena_${suffix}`);
+    const noviy = `noviy_${suffix}`;
+
+    it('заводит аккаунт для проверок смены логина', async () => {
+      await register(smena, 'Сергей Логинов', '8О');
+    });
+
+    it('меняет логин', async () => {
+      const response = await smena.patch('/api/users/me', { username: noviy });
+      assert.equal(response.status, 200, JSON.stringify(response.data));
+      assert.equal(response.data.user.username, noviy);
+
+      const me = await smena.get('/api/auth/me');
+      assert.equal(me.data.user.username, noviy, 'сессия осталась той же');
+    });
+
+    it('вход идёт уже по новому логину', async () => {
+      const fresh = new Client(noviy);
+      const login = await fresh.post('/api/auth/login', {
+        username: noviy,
+        password: 'ochen-nadyozhnyy-parol',
+      });
+      assert.equal(login.status, 200);
+
+      const old = await new Client(smena.name).post('/api/auth/login', {
+        username: smena.name,
+        password: 'ochen-nadyozhnyy-parol',
+      });
+      assert.equal(old.status, 401, 'старый логин больше не пускает');
+    });
+
+    it('прежний логин не достаётся другому', async () => {
+      // Освободившийся логин закреплён за прежним хозяином: иначе им бы
+      // представился кто-то другой тем, кто помнит старое имя.
+      const response = await dasha.patch('/api/users/me', { username: smena.name });
+      assert.equal(response.status, 409);
+      assert.match(response.data.error, /закреплён|занят/i);
+    });
+
+    it('занятый логин не отдают', async () => {
+      const response = await dasha.patch('/api/users/me', { username: anya.name });
+      assert.equal(response.status, 409);
+    });
+
+    it('слишком короткий логин отклоняется', async () => {
+      const response = await dasha.patch('/api/users/me', { username: 'abc' });
+      assert.equal(response.status, 400);
+    });
+
+    it('второй раз подряд логин не меняется — нужна пауза', async () => {
+      const response = await smena.patch('/api/users/me', { username: `esche_${suffix}` });
+      assert.equal(response.status, 429, 'пауза между сменами');
+      assert.match(response.data.error, /раз в/i);
+    });
+
+    it('смена логина не ломает остальной профиль', async () => {
+      const response = await smena.patch('/api/users/me', { bio: 'шахматы' });
+      assert.equal(response.status, 200);
+      assert.equal(response.data.user.bio, 'шахматы');
+      assert.equal(response.data.user.username, noviy);
+    });
+
+    it('находит человека по логину — с собачкой и без', async () => {
+      const bez = await anya.get(`/api/users?search=${noviy}`);
+      assert.ok(
+        bez.data.people.some((person) => person.username === noviy),
+        'поиск по логину',
+      );
+
+      const s = await anya.get(`/api/users?search=${encodeURIComponent(`@${noviy}`)}`);
+      assert.ok(
+        s.data.people.some((person) => person.username === noviy),
+        'собачка в запросе не мешает',
+      );
+    });
+
+    it('находит человека по отображаемому имени', async () => {
+      const response = await anya.get(`/api/users?search=${encodeURIComponent('Логинов')}`);
+      assert.ok(response.data.people.some((person) => person.username === noviy));
+    });
+
+    it('точное совпадение логина стоит первым', async () => {
+      const response = await anya.get(`/api/users?search=${noviy}`);
+      assert.equal(response.data.people[0].username, noviy);
+    });
+
+    it('открывает карточку человека по id', async () => {
+      const response = await anya.get(`/api/users/${petya.id}`);
+      assert.equal(response.status, 200);
+      assert.equal(response.data.user.username, petya.name);
+      assert.equal(response.data.user.grade, '9Г');
+      assert.ok('online' in response.data.user, 'в карточке видно, в сети ли человек');
+
+      const dump = JSON.stringify(response.data);
+      assert.doesNotMatch(dump, /scrypt\$|password/i, 'ничего лишнего наружу');
+    });
+
+    it('карточка закрыта от гостей, мусор в адресе — 400', async () => {
+      assert.equal((await fetch(`${BASE}/api/users/${petya.id}`)).status, 401);
+      assert.equal((await anya.get('/api/users/1%20OR%201=1')).status, 400);
+      assert.equal((await anya.get('/api/users/99999999')).status, 404);
+    });
+  });
+
   describe('Админ-панель', () => {
     const uchitel = new Client(`uchitel_${suffix}`);
     const naruzhu = new Client(`naruzhu_${suffix}`);
@@ -943,10 +1050,10 @@ describe('ГимРум — проверка API', () => {
     });
 
     it('нельзя поднять себе права через изменение профиля', async () => {
-      await petya.patch('/api/users/me', { role: 'admin', username: 'root', id: 1 });
+      await petya.patch('/api/users/me', { role: 'admin', id: 1 });
       const me = await petya.get('/api/auth/me');
-      assert.equal(me.data.user.role, 'member');
-      assert.equal(me.data.user.username, petya.name, 'логин менять нельзя');
+      assert.equal(me.data.user.role, 'member', 'роль назначает сервер, а не запрос');
+      assert.equal(me.data.user.username, petya.name, 'логин сам собой не меняется');
     });
 
     it('сессионная кука недоступна скриптам и защищена от CSRF', async () => {

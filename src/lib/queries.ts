@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { config } from './config';
-import { pool, sql, sqlOne } from './db';
+import { pool, sql, sqlOne, transaction } from './db';
 import { HttpError } from './http';
 
 /** Публичная карточка человека — то, что видят остальные. */
@@ -122,25 +122,43 @@ function toPublicUser(row: UserRow): PublicUser {
   };
 }
 
-/** Каталог школы: все зарегистрированные, с поиском по имени и username. */
+/**
+ * Каталог школы: все зарегистрированные, с поиском по имени и логину.
+ *
+ * Ищем по обоим полям сразу — человека помнят то по имени («Иванов»), то по
+ * логину («ivanov_i»). Ведущая «собачка» срезается: «@ivanov» и «ivanov» —
+ * один и тот же запрос.
+ *
+ * Порядок выдачи важнее, чем кажется: сначала точное совпадение логина, потом
+ * начало имени или логина, и только потом совпадение в середине. Иначе при
+ * вводе «ivan» первым окажется «Марина Иванова», а не «ivan».
+ */
 export async function listPeople(viewerId: number, search: string): Promise<PublicUser[]> {
-  const pattern = `%${search.trim().toLowerCase()}%`;
-  const rows = search.trim()
-    ? await sql<UserRow>`
-        SELECT id, username, display_name, grade, role, avatar_color, avatar_file_id, bio, last_seen_at
-        FROM users
-        WHERE id <> ${viewerId}
-          AND (lower(display_name) LIKE ${pattern} OR username LIKE ${pattern})
-        ORDER BY last_seen_at DESC
-        LIMIT 50
-      `
-    : await sql<UserRow>`
-        SELECT id, username, display_name, grade, role, avatar_color, avatar_file_id, bio, last_seen_at
-        FROM users
-        WHERE id <> ${viewerId}
-        ORDER BY last_seen_at DESC
-        LIMIT 50
-      `;
+  const trimmed = search.trim().toLowerCase().replace(/^@+/, '');
+  if (!trimmed) {
+    const rows = await sql<UserRow>`
+      SELECT id, username, display_name, grade, role, avatar_color, avatar_file_id, bio, last_seen_at
+      FROM users
+      WHERE id <> ${viewerId} AND blocked_at IS NULL
+      ORDER BY last_seen_at DESC
+      LIMIT 50
+    `;
+    return rows.map(toPublicUser);
+  }
+
+  const rows = await sql<UserRow>`
+    SELECT id, username, display_name, grade, role, avatar_color, avatar_file_id, bio, last_seen_at
+    FROM users
+    WHERE id <> ${viewerId}
+      AND blocked_at IS NULL
+      AND (lower(display_name) LIKE ${`%${trimmed}%`} OR username LIKE ${`%${trimmed}%`})
+    ORDER BY
+      (username = ${trimmed}) DESC,
+      (username LIKE ${`${trimmed}%`}) DESC,
+      (lower(display_name) LIKE ${`${trimmed}%`}) DESC,
+      lower(display_name)
+    LIMIT 50
+  `;
   return rows.map(toPublicUser);
 }
 
@@ -150,6 +168,66 @@ export async function getUser(userId: number): Promise<PublicUser | null> {
     FROM users WHERE id = ${userId}
   `;
   return row ? toPublicUser(row) : null;
+}
+
+/**
+ * Меняет логин.
+ *
+ * Три проверки, и каждая закрывает свой способ выдать себя за другого:
+ * логин не должен быть занят сейчас; он не должен быть чужим прежним логином,
+ * который ещё в резерве; и менять его можно не чаще, чем раз в несколько дней —
+ * иначе человека невозможно найти по логину, который он носил вчера.
+ *
+ * Прежний логин уходит в резерв, но за самим хозяином: вернуться к нему он
+ * может в любой момент.
+ */
+export async function changeUsername(userId: number, next: string): Promise<PublicUser> {
+  const me = await sqlOne<{ username: string; username_changed_at: Date | null }>`
+    SELECT username, username_changed_at FROM users WHERE id = ${userId}
+  `;
+  if (!me) throw new HttpError(404, 'Аккаунт не найден.');
+  if (me.username === next) return (await getUser(userId))!;
+
+  const { minDaysBetween, holdDays } = config.usernameChange;
+
+  if (me.username_changed_at) {
+    const nextAllowed = new Date(me.username_changed_at).getTime() + minDaysBetween * 86400_000;
+    if (Date.now() < nextAllowed) {
+      const daysLeft = Math.ceil((nextAllowed - Date.now()) / 86400_000);
+      throw new HttpError(
+        429,
+        `Логин можно менять раз в ${minDaysBetween} дней. Следующая смена — через ${daysLeft} дн.`,
+      );
+    }
+  }
+
+  const taken = await sqlOne<{ id: number }>`SELECT id FROM users WHERE username = ${next}`;
+  if (taken) throw new HttpError(409, 'Такой логин уже занят.');
+
+  const reserved = await sqlOne<{ user_id: number | null }>`
+    SELECT user_id FROM released_usernames
+    WHERE username = ${next} AND released_at > now() - ${`${holdDays} days`}::interval
+  `;
+  if (reserved && reserved.user_id !== userId) {
+    throw new HttpError(409, 'Этот логин недавно освободился и пока закреплён за прежним владельцем.');
+  }
+
+  await transaction(async (query) => {
+    await query(
+      `INSERT INTO released_usernames (username, user_id, released_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (username) DO UPDATE SET user_id = EXCLUDED.user_id, released_at = now()`,
+      [me.username, userId],
+    );
+    // Логин, к которому вернулись, больше не «освободившийся».
+    await query(`DELETE FROM released_usernames WHERE username = $1`, [next]);
+    await query(`UPDATE users SET username = $1, username_changed_at = now() WHERE id = $2`, [
+      next,
+      userId,
+    ]);
+  });
+
+  return (await getUser(userId))!;
 }
 
 // ──────────────────────────── Диалоги ────────────────────────────

@@ -3,7 +3,7 @@ import { config } from '@/lib/config';
 import { sql, sqlOne } from '@/lib/db';
 import { publish } from '@/lib/events';
 import { HttpError, json, readJson, withUser } from '@/lib/http';
-import { getUser } from '@/lib/queries';
+import { changeUsername, getUser } from '@/lib/queries';
 import { rateLimit } from '@/lib/ratelimit';
 import {
   parseBio,
@@ -12,6 +12,7 @@ import {
   parseId,
   parsePassword,
   parseStudentGrade,
+  parseUsername,
 } from '@/lib/validate';
 
 export const runtime = 'nodejs';
@@ -28,6 +29,17 @@ export const PATCH = withUser(async (user, request) => {
 
   if (body.bio !== undefined) {
     await sql`UPDATE users SET bio = ${parseBio(body.bio)} WHERE id = ${user.id}`;
+  }
+
+  if (body.username !== undefined) {
+    // Перебирать свободные логины через смену своего — дешёвый способ узнать,
+    // кто зарегистрирован в гимназии. Поэтому попытки ограничены.
+    await rateLimit(`username-change:${user.id}`, {
+      limit: 10,
+      windowSeconds: 60 * 60,
+      message: 'Слишком много попыток сменить логин. Попробуйте через час.',
+    });
+    await changeUsername(user.id, parseUsername(body.username));
   }
 
   if (body.avatarColor !== undefined) {

@@ -157,6 +157,23 @@ CREATE TABLE IF NOT EXISTS invites (
   uses       INTEGER     NOT NULL DEFAULT 0
 );
 
+-- Освободившиеся логины.
+--
+-- Логин можно менять, и без этой таблицы вышло бы так: человек сменил «ivanov»
+-- на «ivanov_i», а через минуту «ivanov» занял кто-то другой — и пишет от его
+-- имени тем, кто помнит старый логин. Поэтому прежний логин держится в резерве
+-- (см. config.usernameHoldDays) и вернуть его может только сам хозяин.
+CREATE TABLE IF NOT EXISTS released_usernames (
+  username    TEXT        PRIMARY KEY,
+  user_id     BIGINT      REFERENCES users(id) ON DELETE CASCADE,
+  released_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS released_usernames_time_idx ON released_usernames (released_at);
+
+-- Когда логин меняли в последний раз: по нему считается пауза между сменами.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username_changed_at TIMESTAMPTZ;
+
 -- Простой счётчик попыток для защиты входа и регистрации от перебора.
 CREATE TABLE IF NOT EXISTS rate_limits (
   bucket      TEXT        PRIMARY KEY,

@@ -75,6 +75,13 @@ describe('Проверка ввода', () => {
 
   it('отклоняет слишком короткое имя пользователя', () => {
     assert.throws(() => parseUsername('ан'), ValidationError);
+    assert.throws(() => parseUsername('abc'), ValidationError, 'минимум — четыре символа');
+    assert.equal(parseUsername('abcd'), 'abcd');
+  });
+
+  it('срезает «собачку», набранную по привычке', () => {
+    assert.equal(parseUsername('@ivanov'), 'ivanov');
+    assert.equal(parseUsername(' @Ivanov '), 'ivanov');
   });
 
   it('схлопывает длинные серии переводов строк', () => {

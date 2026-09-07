@@ -18,6 +18,7 @@ interface SidebarProps {
   onNewChat: () => void;
   onOpenProfile: () => void;
   onOpenAdmin: () => void;
+  onOpenPerson: (personId: number) => void;
 }
 
 export default function Sidebar({
@@ -31,6 +32,7 @@ export default function Sidebar({
   onNewChat,
   onOpenProfile,
   onOpenAdmin,
+  onOpenPerson,
 }: SidebarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ messages: ChatMessage[]; people: Person[] } | null>(null);
@@ -136,13 +138,11 @@ export default function Sidebar({
               setQuery('');
               onSelect(id);
             }}
-            onSelectPerson={async (personId) => {
-              const data = await api.post<{ conversation: Conversation }>('/api/conversations', {
-                kind: 'dm',
-                userId: personId,
-              });
+            onSelectPerson={(personId) => {
+              // Сначала карточка человека: по одному имени в списке не всегда
+              // понятно, тот ли это Иванов, а диалог создаётся кнопкой в ней.
               setQuery('');
-              onSelect(data.conversation.id);
+              onOpenPerson(personId);
             }}
           />
         ) : loading ? (

@@ -7,15 +7,23 @@ export class ValidationError extends Error {
   }
 }
 
-const USERNAME_RE = /^[a-z0-9_]{3,24}$/;
+const USERNAME_RE = new RegExp(
+  `^[a-z0-9_]{${config.limits.usernameMinLength},${config.limits.usernameLength}}$`,
+);
 
-/** Приводит username к канону и проверяет его. */
+/**
+ * Приводит логин к канону и проверяет его.
+ *
+ * Ведущая «собачка» срезается: её набирают по привычке из других мессенджеров,
+ * и отказывать из-за неё бессмысленно.
+ */
 export function parseUsername(raw: unknown): string {
   if (typeof raw !== 'string') throw new ValidationError('Укажите имя пользователя.');
-  const username = raw.trim().toLowerCase();
+  const username = raw.trim().toLowerCase().replace(/^@+/, '');
   if (!USERNAME_RE.test(username)) {
     throw new ValidationError(
-      'Имя пользователя: от 3 до 24 символов, только латиница, цифры и знак подчёркивания.',
+      `Имя пользователя: от ${config.limits.usernameMinLength} до ${config.limits.usernameLength} ` +
+        'символов, только латиница, цифры и знак подчёркивания.',
     );
   }
   return username;

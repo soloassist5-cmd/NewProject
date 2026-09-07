@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AdminDialog from './AdminDialog';
 import ChatView from './ChatView';
 import NewChatDialog from './NewChatDialog';
+import PersonDialog from './PersonDialog';
 import ProfileDialog from './ProfileDialog';
 import Sidebar from './Sidebar';
 import { api } from '@/lib/client';
@@ -79,6 +80,8 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
   const [showNewChat, setShowNewChat] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  // Чей профиль открыт. Нажатие на имя показывает карточку, а не сразу диалог.
+  const [personId, setPersonId] = useState<number | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
   // На телефоне высоту задаёт видимая область, а не окно: иначе клавиатура
@@ -480,13 +483,14 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
 
   /** Открывает личный диалог с человеком, создавая его при необходимости. */
   const startDirectChat = useCallback(
-    async (personId: number) => {
+    async (withId: number) => {
       const data = await api.post<{ conversation: Conversation }>('/api/conversations', {
         kind: 'dm',
-        userId: personId,
+        userId: withId,
       });
       await refreshConversations();
       setShowNewChat(false);
+      setPersonId(null);
       await openConversation(data.conversation.id);
     },
     [openConversation, refreshConversations],
@@ -532,6 +536,7 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
         onNewChat={() => setShowNewChat(true)}
         onOpenProfile={() => setShowProfile(true)}
         onOpenAdmin={() => setShowAdmin(true)}
+        onOpenPerson={setPersonId}
       />
 
       <ChatView
@@ -546,7 +551,7 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
         onMessagesChange={setActiveMessages}
         onConversationsChange={refreshConversations}
         onMarkRead={markRead}
-        onOpenPerson={startDirectChat}
+        onOpenPerson={setPersonId}
       />
 
       {showNewChat ? (
@@ -569,6 +574,15 @@ export default function Messenger({ me: initialMe, schoolName, grades }: Messeng
 
       {showAdmin && me.role === 'admin' ? (
         <AdminDialog me={me} grades={grades} onClose={() => setShowAdmin(false)} />
+      ) : null}
+
+      {personId !== null ? (
+        <PersonDialog
+          personId={personId}
+          meId={me.id}
+          onClose={() => setPersonId(null)}
+          onWrite={startDirectChat}
+        />
       ) : null}
     </div>
   );

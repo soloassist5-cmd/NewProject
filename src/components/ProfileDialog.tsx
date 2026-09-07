@@ -19,6 +19,7 @@ interface ProfileDialogProps {
 
 export default function ProfileDialog({ me, grades, onClose, onUpdated }: ProfileDialogProps) {
   const [displayName, setDisplayName] = useState(me.displayName);
+  const [username, setUsername] = useState(me.username);
   const [bio, setBio] = useState(me.bio);
   // Класс хранится строкой «9О», а выбирается двумя списками.
   const [parallel, setParallel] = useState(me.grade ? me.grade.replace(/\D+$/, '') : '');
@@ -78,6 +79,9 @@ export default function ProfileDialog({ me, grades, onClose, onUpdated }: Profil
       avatarFileId,
       grade: parallel === '' ? '' : `${parallel}${letter}`,
     };
+    // Логин шлём, только если его действительно поменяли: иначе каждое
+    // сохранение профиля упиралось бы в паузу между сменами.
+    if (username !== me.username) payload.username = username;
     if (newPassword) {
       payload.newPassword = newPassword;
       payload.currentPassword = currentPassword;
@@ -224,11 +228,27 @@ export default function ProfileDialog({ me, grades, onClose, onUpdated }: Profil
             </div>
           )}
 
-          <div className="field">
+          <label className="field">
             <span className="field-label">Логин</span>
-            <input className="input" value={`@${me.username}`} disabled />
-            <span className="field-hint">Его менять нельзя — по нему вас находят.</span>
-          </div>
+            <div className="input-prefix">
+              <span aria-hidden>@</span>
+              <input
+                className="input"
+                value={username}
+                onChange={(event) =>
+                  setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))
+                }
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-label="Логин"
+              />
+            </div>
+            <span className="field-hint">
+              По нему вас находят в поиске. Менять можно раз в неделю; прежний логин на два
+              месяца остаётся закреплён за вами, чужим он не достанется.
+            </span>
+          </label>
 
           <div className="field">
             <span className="field-label">Уведомления</span>
